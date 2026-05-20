@@ -1,0 +1,61 @@
+/**
+ * Detect likely bots / security scanners from User-Agent strings.
+ * We record is_bot but do not block — useful for filtering in reports.
+ */
+const BOT_PATTERNS: RegExp[] = [
+  /bot\b/i,
+  /crawler/i,
+  /spider/i,
+  /slurp/i,
+  /curl\//i,
+  /wget\//i,
+  /python-requests/i,
+  /go-http-client/i,
+  /java\//i,
+  /libwww/i,
+  /httpclient/i,
+  /scrapy/i,
+  /headless/i,
+  /phantomjs/i,
+  /selenium/i,
+  /puppeteer/i,
+  /playwright/i,
+  /googlebot/i,
+  /bingbot/i,
+  /yandex/i,
+  /baiduspider/i,
+  /facebookexternalhit/i,
+  /linkedinbot/i,
+  /twitterbot/i,
+  /applebot/i,
+  /semrush/i,
+  /ahrefs/i,
+  /mj12bot/i,
+  /dotbot/i,
+  /petalbot/i,
+  /bytespider/i,
+  /gptbot/i,
+  /claudebot/i,
+  /anthropic/i,
+  /openai/i,
+  /security/i,
+  /scanner/i,
+  /nmap/i,
+  /masscan/i,
+  /zgrab/i,
+  /nessus/i,
+  /nikto/i,
+  /sqlmap/i,
+  /dirbuster/i,
+  /gobuster/i,
+  /ffuf/i,
+  /burp/i,
+  /qualys/i,
+  /shodan/i,
+  /censys/i,
+];
+
+export function isBotUserAgent(userAgent: string | null | undefined): boolean {
+  if (!userAgent) return false;
+  return BOT_PATTERNS.some((pattern) => pattern.test(userAgent));
+}

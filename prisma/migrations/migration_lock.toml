@@ -1,0 +1,2 @@
+# Provider used in migrations — do not edit manually.
+provider = "postgresql"

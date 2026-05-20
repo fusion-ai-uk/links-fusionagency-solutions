@@ -1,0 +1,32 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model EmailEvent {
+  id             String   @id @default(cuid())
+  eventType      String   @map("event_type")
+  campaignId     String?  @map("campaign_id")
+  recipientToken String?  @map("recipient_token")
+  messageId      String?  @map("message_id")
+  linkId         String?  @map("link_id")
+  destinationUrl String?  @map("destination_url")
+  ipHash         String?  @map("ip_hash")
+  ipCountry      String?  @map("ip_country")
+  ipRegion       String?  @map("ip_region")
+  ipCity         String?  @map("ip_city")
+  userAgent      String?  @map("user_agent") @db.Text
+  isBot          Boolean  @default(false) @map("is_bot")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@index([eventType])
+  @@index([campaignId])
+  @@index([recipientToken])
+  @@index([linkId])
+  @@index([createdAt])
+  @@map("email_events")
+}
