@@ -27,7 +27,7 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
       <header className={styles.header}>
         <div>
           <h1>Email Tracking Dashboard</h1>
-          <p className={styles.subtitle}>Fusion Agency Solutions</p>
+          <p className={styles.subtitle}>Fusion Agency Solutions — campaign-level metrics</p>
         </div>
         <form action={logoutAction}>
           <button type="submit" className={styles.buttonSecondary}>
@@ -35,6 +35,11 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
           </button>
         </form>
       </header>
+
+      <p className={styles.notice}>
+        Campaign-level tracking only. Approximate unique counts use hashed IP + user
+        agent — they do not identify individual recipients.
+      </p>
 
       <form method="get" className={styles.filterBar}>
         <label htmlFor="campaign">Campaign filter</label>
@@ -60,18 +65,18 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
           <span className={styles.statValue}>{stats.totalOpens}</span>
         </div>
         <div className={styles.statCard}>
-          <span className={styles.statLabel}>Unique opens</span>
-          <span className={styles.statValue}>{stats.uniqueOpens}</span>
-          <span className={styles.statHint}>by recipient_token</span>
+          <span className={styles.statLabel}>Approx. unique opens</span>
+          <span className={styles.statValue}>{stats.approximateUniqueOpens}</span>
+          <span className={styles.statHint}>cid + ip_hash + user_agent</span>
         </div>
         <div className={styles.statCard}>
           <span className={styles.statLabel}>Total clicks</span>
           <span className={styles.statValue}>{stats.totalClicks}</span>
         </div>
         <div className={styles.statCard}>
-          <span className={styles.statLabel}>Unique clicks</span>
-          <span className={styles.statValue}>{stats.uniqueClicks}</span>
-          <span className={styles.statHint}>by recipient_token</span>
+          <span className={styles.statLabel}>Approx. unique clicks</span>
+          <span className={styles.statValue}>{stats.approximateUniqueClicks}</span>
+          <span className={styles.statHint}>cid + ip_hash + user_agent</span>
         </div>
       </section>
 
@@ -143,7 +148,6 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
                   <th>Time</th>
                   <th>Type</th>
                   <th>Campaign</th>
-                  <th>Recipient</th>
                   <th>Link</th>
                   <th>Country</th>
                   <th>Bot</th>
@@ -165,11 +169,6 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
                       </span>
                     </td>
                     <td>{event.campaignId ?? "—"}</td>
-                    <td>
-                      <code className={styles.truncate}>
-                        {event.recipientToken ?? "—"}
-                      </code>
-                    </td>
                     <td>{event.linkId ?? "—"}</td>
                     <td>{event.ipCountry ?? "—"}</td>
                     <td>{event.isBot ? "yes" : "no"}</td>

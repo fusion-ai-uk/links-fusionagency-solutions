@@ -1,18 +1,17 @@
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 
 export interface DashboardStats {
   totalOpens: number;
-  uniqueOpens: number;
   totalClicks: number;
-  uniqueClicks: number;
+  approximateUniqueOpens: number;
+  approximateUniqueClicks: number;
   clicksByLinkId: { linkId: string; count: number }[];
   eventsByCampaign: { campaignId: string; opens: number; clicks: number }[];
   recentEvents: {
     id: string;
     eventType: string;
     campaignId: string | null;
-    recipientToken: string | null;
-    messageId: string | null;
     linkId: string | null;
     destinationUrl: string | null;
     ipCountry: string | null;
@@ -20,6 +19,38 @@ export interface DashboardStats {
     createdAt: Date;
   }[];
   campaigns: string[];
+}
+
+/**
+ * Best-effort unique count using distinct campaign_id + event_type + ip_hash + user_agent.
+ * Labelled approximate in the dashboard — does not identify individual recipients.
+ */
+async function countApproximateUnique(
+  eventType: "open" | "click",
+  campaignFilter?: string | null
+): Promise<number> {
+  const campaignClause =
+    campaignFilter && campaignFilter !== "all"
+      ? Prisma.sql`AND campaign_id = ${campaignFilter}`
+      : Prisma.empty;
+
+  const result = await prisma.$queryRaw<[{ count: bigint }]>(
+    Prisma.sql`
+      SELECT COUNT(*)::bigint AS count
+      FROM (
+        SELECT DISTINCT
+          COALESCE(campaign_id, 'unknown') AS campaign_id,
+          event_type,
+          COALESCE(ip_hash, '') AS ip_hash,
+          COALESCE(user_agent, '') AS user_agent
+        FROM email_events
+        WHERE event_type = ${eventType}
+        ${campaignClause}
+      ) AS unique_combos
+    `
+  );
+
+  return Number(result[0]?.count ?? 0);
 }
 
 export async function getDashboardStats(
@@ -32,9 +63,9 @@ export async function getDashboardStats(
 
   const [
     totalOpens,
-    uniqueOpensResult,
     totalClicks,
-    uniqueClicksResult,
+    approximateUniqueOpens,
+    approximateUniqueClicks,
     clicksByLinkRaw,
     opensByCampaign,
     clicksByCampaign,
@@ -42,23 +73,9 @@ export async function getDashboardStats(
     campaignsRaw,
   ] = await Promise.all([
     prisma.emailEvent.count({ where: { ...where, eventType: "open" } }),
-    prisma.emailEvent.groupBy({
-      by: ["recipientToken"],
-      where: {
-        ...where,
-        eventType: "open",
-        recipientToken: { not: null },
-      },
-    }),
     prisma.emailEvent.count({ where: { ...where, eventType: "click" } }),
-    prisma.emailEvent.groupBy({
-      by: ["recipientToken"],
-      where: {
-        ...where,
-        eventType: "click",
-        recipientToken: { not: null },
-      },
-    }),
+    countApproximateUnique("open", campaignFilter),
+    countApproximateUnique("click", campaignFilter),
     prisma.emailEvent.groupBy({
       by: ["linkId"],
       where: {
@@ -87,8 +104,6 @@ export async function getDashboardStats(
         id: true,
         eventType: true,
         campaignId: true,
-        recipientToken: true,
-        messageId: true,
         linkId: true,
         destinationUrl: true,
         ipCountry: true,
@@ -129,9 +144,9 @@ export async function getDashboardStats(
 
   return {
     totalOpens,
-    uniqueOpens: uniqueOpensResult.length,
     totalClicks,
-    uniqueClicks: uniqueClicksResult.length,
+    approximateUniqueOpens,
+    approximateUniqueClicks,
     clicksByLinkId: clicksByLinkRaw.map((row) => ({
       linkId: row.linkId ?? "unknown",
       count: row._count.id,
@@ -158,8 +173,6 @@ export const CSV_HEADERS = [
   "id",
   "event_type",
   "campaign_id",
-  "recipient_token",
-  "message_id",
   "link_id",
   "destination_url",
   "ip_hash",
@@ -169,14 +182,14 @@ export const CSV_HEADERS = [
   "user_agent",
   "is_bot",
   "created_at",
+  "recipient_token",
+  "message_id",
 ] as const;
 
 export function eventToCsvRow(event: {
   id: string;
   eventType: string;
   campaignId: string | null;
-  recipientToken: string | null;
-  messageId: string | null;
   linkId: string | null;
   destinationUrl: string | null;
   ipHash: string | null;
@@ -186,13 +199,13 @@ export function eventToCsvRow(event: {
   userAgent: string | null;
   isBot: boolean;
   createdAt: Date;
+  recipientToken: string | null;
+  messageId: string | null;
 }): string {
   return [
     event.id,
     event.eventType,
     event.campaignId,
-    event.recipientToken,
-    event.messageId,
     event.linkId,
     event.destinationUrl,
     event.ipHash,
@@ -202,6 +215,8 @@ export function eventToCsvRow(event: {
     event.userAgent,
     event.isBot,
     event.createdAt,
+    event.recipientToken,
+    event.messageId,
   ]
     .map(escapeCsvField)
     .join(",");

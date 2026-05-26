@@ -10,7 +10,9 @@ export const runtime = "nodejs";
 
 /**
  * Open tracking pixel endpoint.
- * GET /o?cid={campaign_id}&rid={recipient_token}&mid={message_id}
+ * GET /o?cid={campaign_id}
+ *
+ * Optional legacy params rid and mid are accepted but not required.
  */
 export async function GET(request: NextRequest) {
   const params = parseTrackingParams(request.nextUrl.searchParams);

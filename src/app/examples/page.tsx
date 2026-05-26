@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { getLinkIds } from "@/config/links";
+import { TRACKING_BASE_URL } from "@/config/site";
 
-const BASE = "https://links.fusionagency.solutions";
+const BASE = TRACKING_BASE_URL;
+const EXAMPLE_CAMPAIGN = "imi-lyvdelzi-may-2026";
 
 export default function ExamplesPage() {
   const linkIds = getLinkIds();
@@ -14,9 +16,8 @@ export default function ExamplesPage() {
 
       <h1>Email HTML Examples</h1>
       <p style={{ color: "var(--muted)" }}>
-        Copy these snippets into your IMI email templates. Replace{" "}
-        <code>CAMPAIGN_ID</code>, <code>RECIPIENT_TOKEN</code>, and{" "}
-        <code>MESSAGE_ID</code> with values from IMI merge fields.
+        Campaign-level tracking only — replace <code>CAMPAIGN_ID</code> with your
+        campaign slug. No IMI merge tags are required.
       </p>
 
       <h2>Open tracking pixel</h2>
@@ -26,7 +27,7 @@ export default function ExamplesPage() {
         for limitations.
       </p>
       <pre>
-        <code>{`<img src="${BASE}/o?cid=CAMPAIGN_ID&rid=RECIPIENT_TOKEN&mid=MESSAGE_ID" width="1" height="1" alt="" style="width:1px;height:1px;border:0;display:block;" />`}</code>
+        <code>{`<img src="${BASE}/o?cid=CAMPAIGN_ID" width="1" height="1" alt="" style="width:1px;height:1px;border:0;display:block;" />`}</code>
       </pre>
 
       <h2>Tracked CTA links</h2>
@@ -39,29 +40,27 @@ export default function ExamplesPage() {
         ))}
       </p>
       <pre>
-        <code>{`<a href="${BASE}/c/hero-button?cid=CAMPAIGN_ID&rid=RECIPIENT_TOKEN&mid=MESSAGE_ID">Learn more</a>`}</code>
-      </pre>
-      <pre>
-        <code>{`<a href="${BASE}/c/secondary-cta?cid=CAMPAIGN_ID&rid=RECIPIENT_TOKEN&mid=MESSAGE_ID">Contact us</a>`}</code>
+        <code>{`<a href="${BASE}/c/LINK_ID?cid=CAMPAIGN_ID">CTA text</a>`}</code>
       </pre>
 
-      <h2>Do not modify</h2>
-      <div
-        style={{
-          padding: "1rem",
-          background: "#fffbeb",
-          border: "1px solid #fcd34d",
-          borderRadius: 8,
-          marginTop: "1rem",
-        }}
-      >
-        <p style={{ margin: 0 }}>
-          <strong>Important:</strong> Do not wrap or replace unsubscribe links,
-          preference centre links, legal disclaimers, or compliance-related URLs
-          with this tracking service. Those must remain direct links as required
-          by email regulations and IMI configuration.
-        </p>
-      </div>
+      <h2>Real example</h2>
+      <pre>
+        <code>{`<img src="${BASE}/o?cid=${EXAMPLE_CAMPAIGN}" width="1" height="1" alt="" style="width:1px;height:1px;border:0;display:block;" />
+
+<a href="${BASE}/c/learn-more?cid=${EXAMPLE_CAMPAIGN}">Learn more</a>`}</code>
+      </pre>
+
+      <h2>Instructions for the email HTML build</h2>
+      <ul style={{ lineHeight: 1.8 }}>
+        <li>Add the open pixel once near the bottom of the email HTML, ideally before <code>&lt;/body&gt;</code></li>
+        <li>Replace only the CTA/button links you want to track</li>
+        <li>Use <code>/c/LINK_ID?cid=CAMPAIGN_ID</code> for tracked links</li>
+        <li>Do not change unsubscribe links</li>
+        <li>Do not change preference centre links</li>
+        <li>Do not change legal or compliance links</li>
+        <li>Do not add raw email addresses to URLs</li>
+        <li>No IMI merge tags are needed</li>
+      </ul>
 
       <h2>Query parameters</h2>
       <table
@@ -86,21 +85,9 @@ export default function ExamplesPage() {
             <td style={{ padding: "0.5rem" }}>
               <code>cid</code>
             </td>
-            <td style={{ padding: "0.5rem" }}>Campaign identifier from IMI</td>
-          </tr>
-          <tr>
             <td style={{ padding: "0.5rem" }}>
-              <code>rid</code>
+              Campaign identifier (required in URLs; logged as &quot;unknown&quot; if missing)
             </td>
-            <td style={{ padding: "0.5rem" }}>
-              Opaque recipient token from IMI (not an email address)
-            </td>
-          </tr>
-          <tr>
-            <td style={{ padding: "0.5rem" }}>
-              <code>mid</code>
-            </td>
-            <td style={{ padding: "0.5rem" }}>Message / send identifier</td>
           </tr>
         </tbody>
       </table>

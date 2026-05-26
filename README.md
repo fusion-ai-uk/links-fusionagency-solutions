@@ -1,10 +1,34 @@
 # Email Link Tracking — Fusion Agency Solutions
 
-Private email open and click tracking service for IMI marketing campaigns.
+Private **campaign-level** email open and click tracking for IMI marketing emails.
 
-**Production domain:** [https://links.fusionagency.solutions](https://links.fusionagency.solutions)
+**Production domain:** [https://links.vercel.app](https://links.vercel.app)
 
 This service logs estimated email opens via a 1×1 tracking pixel and CTA clicks via allowlisted redirect links. It includes a password-protected admin dashboard and CSV export.
+
+---
+
+## Campaign-level tracking limitation
+
+Because IMI is **not** providing recipient IDs or merge tags, this system tracks **campaign-level opens and clicks only**.
+
+**We can track:**
+
+- Total opens
+- Total clicks
+- Clicks by CTA/link
+- Campaign-level performance
+- Rough location where available
+- Approximate unique users based on hashed IP and user agent
+
+**We cannot reliably track:**
+
+- Individual recipients
+- Exact unique opens
+- Exact unique clicks
+- Recipient-level journeys
+
+Approximate unique metrics in the dashboard use distinct combinations of `campaign_id + event_type + ip_hash + user_agent`. These are labelled as approximate and must not be treated as recipient counts.
 
 ---
 
@@ -12,8 +36,8 @@ This service logs estimated email opens via a 1×1 tracking pixel and CTA clicks
 
 | Endpoint | Purpose |
 |----------|---------|
-| `GET /o?cid=&rid=&mid=` | Open tracking pixel (returns 1×1 GIF) |
-| `GET /c/[linkId]?cid=&rid=&mid=` | Click tracking redirect |
+| `GET /o?cid={campaign_id}` | Open tracking pixel (returns 1×1 GIF) |
+| `GET /c/[linkId]?cid={campaign_id}` | Click tracking redirect |
 | `GET /health` | Health check (includes DB connectivity) |
 | `GET /admin` | Admin dashboard |
 | `GET /admin/export.csv` | CSV export of all events |
@@ -59,6 +83,8 @@ cp .env.example .env
 | `ADMIN_PASSWORD` | Yes | Password for `/admin` login |
 | `IP_HASH_SECRET` | Yes | Secret for HMAC-hashing client IPs (e.g. `openssl rand -hex 32`) |
 
+No IMI-related environment variables are required.
+
 ### 3. Database setup
 
 Run migrations against your database:
@@ -101,7 +127,7 @@ Add these in **Vercel → Project → Settings → Environment Variables** for P
 
 ### From GitHub
 
-1. Push this repo to GitHub (see below).
+1. Push this repo to GitHub.
 2. In [Vercel](https://vercel.com), **Add New Project** → import `fusion-ai-uk/links-fusionagency-solutions`.
 3. Framework preset: **Next.js** (auto-detected).
 4. Add the three environment variables above.
@@ -121,35 +147,22 @@ Or use your provider's SQL console to apply `prisma/migrations/20250520000000_in
 
 ---
 
-## Custom domain: links.fusionagency.solutions
+## Production URL on Vercel
 
-### In Vercel
+The tracking service is served at the Vercel production URL:
 
-1. Go to **Project → Settings → Domains**.
-2. Add `links.fusionagency.solutions`.
-3. Vercel will show the required DNS records.
+**https://links.vercel.app**
 
-### DNS configuration
+Use this base URL in all email HTML snippets and IMI handover docs. Routes are unchanged: `/o`, `/c/[linkId]`, `/admin`, `/health`.
 
-In your DNS provider for `fusionagency.solutions`, add:
+### Verification after deploy
 
-**Option A — CNAME (recommended for subdomains)**
+Confirm:
+  - [https://links.vercel.app/health](https://links.vercel.app/health) returns `{ "status": "ok", ... }`
+  - [https://links.vercel.app/admin](https://links.vercel.app/admin) shows the login page
+  - [https://links.vercel.app/examples](https://links.vercel.app/examples) shows HTML snippets
 
-| Type | Name | Value |
-|------|------|-------|
-| CNAME | `links` | `cname.vercel-dns.com` |
-
-**Option B — If Vercel provides a specific target**
-
-Use the exact CNAME or A record values shown in the Vercel domain settings panel.
-
-### Verification
-
-- Wait for DNS propagation (usually minutes, can take up to 48 hours).
-- Vercel will issue an SSL certificate automatically.
-- Confirm:
-  - [https://links.fusionagency.solutions/health](https://links.fusionagency.solutions/health) returns `{ "status": "ok", ... }`
-  - [https://links.fusionagency.solutions/admin](https://links.fusionagency.solutions/admin) shows the login page
+If you add a custom domain later, update the URLs in your email templates accordingly.
 
 ---
 
@@ -164,7 +177,7 @@ export const linkDestinations: Record<string, string> = {
 };
 ```
 
-- **Key** = link ID used in URLs: `/c/hero-button?...`
+- **Key** = link ID used in URLs: `/c/hero-button?cid=...`
 - **Value** = full destination URL (include UTM params here)
 - Commit and redeploy after changes
 
@@ -172,25 +185,42 @@ export const linkDestinations: Record<string, string> = {
 
 ---
 
-## Email HTML snippets
+## Instructions for the email HTML build
 
-See also [/examples](https://links.fusionagency.solutions/examples) when deployed.
+- Add the open pixel once near the bottom of the email HTML, ideally before `</body>`
+- Replace only the CTA/button links you want to track
+- Use `/c/LINK_ID?cid=CAMPAIGN_ID` for tracked links
+- Do not change unsubscribe links
+- Do not change preference centre links
+- Do not change legal or compliance links
+- Do not add raw email addresses to URLs
+- **No IMI merge tags are needed**
+
+See also [/examples](https://links.vercel.app/examples) when deployed.
+
+---
+
+## Email HTML snippets
 
 ### Open pixel
 
 ```html
-<img src="https://links.fusionagency.solutions/o?cid=CAMPAIGN_ID&rid=RECIPIENT_TOKEN&mid=MESSAGE_ID" width="1" height="1" alt="" style="width:1px;height:1px;border:0;display:block;" />
+<img src="https://links.vercel.app/o?cid=CAMPAIGN_ID" width="1" height="1" alt="" style="width:1px;height:1px;border:0;display:block;" />
 ```
 
 ### Tracked CTA
 
 ```html
-<a href="https://links.fusionagency.solutions/c/hero-button?cid=CAMPAIGN_ID&rid=RECIPIENT_TOKEN&mid=MESSAGE_ID">Learn more</a>
+<a href="https://links.vercel.app/c/LINK_ID?cid=CAMPAIGN_ID">CTA text</a>
 ```
 
-### Do not modify
+### Real example
 
-Do **not** wrap unsubscribe, preference centre, legal, or compliance links with this tracker. Those must remain direct URLs.
+```html
+<img src="https://links.vercel.app/o?cid=imi-lyvdelzi-may-2026" width="1" height="1" alt="" style="width:1px;height:1px;border:0;display:block;" />
+
+<a href="https://links.vercel.app/c/learn-more?cid=imi-lyvdelzi-may-2026">Learn more</a>
+```
 
 ---
 
@@ -199,7 +229,7 @@ Do **not** wrap unsubscribe, preference centre, legal, or compliance links with 
 ### Open pixel
 
 ```bash
-curl -i "http://localhost:3000/o?cid=test-campaign&rid=recipient-123&mid=msg-456"
+curl -i "http://localhost:3000/o?cid=imi-lyvdelzi-may-2026"
 ```
 
 Expect: `200`, `Content-Type: image/gif`, `Cache-Control: no-store`, binary GIF body.
@@ -207,15 +237,21 @@ Expect: `200`, `Content-Type: image/gif`, `Cache-Control: no-store`, binary GIF 
 Or open in a browser:
 
 ```
-http://localhost:3000/o?cid=test-campaign&rid=recipient-123&mid=msg-456
+http://localhost:3000/o?cid=imi-lyvdelzi-may-2026
 ```
 
 Check `/admin` for a new **open** event.
 
+Missing `cid` still returns the pixel but logs `campaign_id` as `unknown`:
+
+```bash
+curl -i "http://localhost:3000/o"
+```
+
 ### Click redirect
 
 ```bash
-curl -i "http://localhost:3000/c/hero-button?cid=test-campaign&rid=recipient-123&mid=msg-456"
+curl -i "http://localhost:3000/c/hero-button?cid=imi-lyvdelzi-may-2026"
 ```
 
 Expect: `302` redirect to the URL in `src/config/links.ts`.
@@ -250,7 +286,7 @@ Email open counts are **estimates only**:
 - **Gmail** may cache or proxy images.
 - Some clients block images by default.
 - Security scanners and bots may request the pixel (`is_bot` is recorded but traffic is not blocked).
-- Multiple opens from the same recipient are counted in total opens; unique opens dedupe by `recipient_token`.
+- Without recipient IDs, opens cannot be attributed to individual people.
 
 Use opens as a directional signal; rely on click tracking for stronger engagement data.
 
@@ -258,11 +294,11 @@ Use opens as a directional signal; rely on click tracking for stronger engagemen
 
 ## Privacy notes
 
-- **No raw email addresses** are stored or required in URLs. `recipient_token` is an opaque ID from IMI.
-- **No raw IP addresses** are stored. IPs are HMAC-SHA256 hashed with `IP_HASH_SECRET`.
+- **No raw email addresses** in URLs or database.
+- **No raw IP addresses** stored. IPs are HMAC-SHA256 hashed with `IP_HASH_SECRET`.
 - **Location** is coarse only (country / region / city from Vercel geo headers when available).
-- User agents are stored for bot detection and debugging.
-- This service is for internal campaign analytics, not public-facing profiles.
+- User agents are stored for bot detection and approximate deduplication.
+- `recipient_token` and `message_id` columns exist for legacy compatibility but are not used in default tracking URLs.
 
 ---
 
@@ -274,9 +310,7 @@ Use opens as a directional signal; rely on click tracking for stronger engagemen
 |--------|-------------|
 | `id` | Primary key (cuid) |
 | `event_type` | `open` or `click` |
-| `campaign_id` | From `cid` query param |
-| `recipient_token` | From `rid` query param |
-| `message_id` | From `mid` query param |
+| `campaign_id` | From `cid` query param (`unknown` if missing) |
 | `link_id` | Click only — allowlisted link key |
 | `destination_url` | Click only — resolved destination |
 | `ip_hash` | HMAC hash of client IP |
@@ -284,6 +318,8 @@ Use opens as a directional signal; rely on click tracking for stronger engagemen
 | `user_agent` | Raw user agent string |
 | `is_bot` | Bot/scanner heuristic flag |
 | `created_at` | Event timestamp |
+| `recipient_token` | Nullable legacy field (not used by default) |
+| `message_id` | Nullable legacy field (not used by default) |
 
 ---
 

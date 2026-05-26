@@ -3,18 +3,33 @@ import { getClientIp, hashIp } from "@/lib/ip-hash";
 import { getGeoFromHeaders } from "@/lib/geo";
 import { isBotUserAgent } from "@/lib/bot-detect";
 
+/** Stored when cid query param is missing — email experience is never blocked. */
+export const UNKNOWN_CAMPAIGN = "unknown";
+
 export type TrackingParams = {
-  campaignId: string | null;
+  campaignId: string;
   recipientToken: string | null;
   messageId: string | null;
 };
 
-/** Parse optional tracking query params — never throws on missing values. */
+/**
+ * Resolve campaign ID from cid query param.
+ * Returns "unknown" when missing so logging never breaks the pixel/redirect.
+ */
+export function resolveCampaignId(searchParams: URLSearchParams): string {
+  const cid = searchParams.get("cid")?.trim();
+  return cid || UNKNOWN_CAMPAIGN;
+}
+
+/**
+ * Parse tracking query params. cid defaults to "unknown" if absent.
+ * rid and mid are optional legacy fields — not required for campaign-level tracking.
+ */
 export function parseTrackingParams(
   searchParams: URLSearchParams
 ): TrackingParams {
   return {
-    campaignId: searchParams.get("cid")?.trim() || null,
+    campaignId: resolveCampaignId(searchParams),
     recipientToken: searchParams.get("rid")?.trim() || null,
     messageId: searchParams.get("mid")?.trim() || null,
   };
@@ -22,7 +37,7 @@ export function parseTrackingParams(
 
 export interface LogEventInput {
   eventType: "open" | "click";
-  campaignId?: string | null;
+  campaignId: string;
   recipientToken?: string | null;
   messageId?: string | null;
   linkId?: string | null;
@@ -35,8 +50,15 @@ export interface LogEventInput {
  * so tracking endpoints always return pixels/redirects even if DB is down.
  */
 export async function logEmailEvent(input: LogEventInput): Promise<void> {
-  const { request, eventType, campaignId, recipientToken, messageId, linkId, destinationUrl } =
-    input;
+  const {
+    request,
+    eventType,
+    campaignId,
+    recipientToken,
+    messageId,
+    linkId,
+    destinationUrl,
+  } = input;
 
   const userAgent = request.headers.get("user-agent");
   const ip = getClientIp(request);
@@ -46,7 +68,7 @@ export async function logEmailEvent(input: LogEventInput): Promise<void> {
     await prisma.emailEvent.create({
       data: {
         eventType,
-        campaignId: campaignId ?? null,
+        campaignId,
         recipientToken: recipientToken ?? null,
         messageId: messageId ?? null,
         linkId: linkId ?? null,

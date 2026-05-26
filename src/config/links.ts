@@ -8,6 +8,8 @@
 export const linkDestinations: Record<string, string> = {
   "hero-button":
     "https://example.com/landing-page?utm_source=imi&utm_medium=email&utm_campaign=test&utm_content=hero-button",
+  "learn-more":
+    "https://example.com/landing-page?utm_source=imi&utm_medium=email&utm_campaign=test&utm_content=learn-more",
   "secondary-cta":
     "https://example.com/contact?utm_source=imi&utm_medium=email&utm_campaign=test&utm_content=secondary-cta",
 };

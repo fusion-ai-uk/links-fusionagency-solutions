@@ -10,9 +10,10 @@ type RouteContext = {
 
 /**
  * Click tracking redirect endpoint.
- * GET /c/[linkId]?cid={campaign_id}&rid={recipient_token}&mid={message_id}
+ * GET /c/[linkId]?cid={campaign_id}
  *
  * Destination URLs come only from the allowlisted link map — never from query params.
+ * Optional legacy params rid and mid are accepted but not required.
  */
 export async function GET(request: NextRequest, context: RouteContext) {
   const { linkId } = await context.params;
