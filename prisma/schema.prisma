@@ -3,8 +3,11 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  // Vercel Neon sets both DATABASE_URL and DATABASE_POSTGRES_PRISMA_URL.
+  // Prisma on serverless needs the pooled Prisma URL; migrations use directUrl.
+  url       = env("DATABASE_POSTGRES_PRISMA_URL")
+  directUrl = env("DATABASE_URL_UNPOOLED")
 }
 
 model EmailEvent {

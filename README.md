@@ -79,9 +79,13 @@ cp .env.example .env
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `DATABASE_URL` | Yes | PostgreSQL connection string |
+| `DATABASE_POSTGRES_PRISMA_URL` | Yes (Vercel) | Prisma pooled connection — set automatically by Vercel Neon/Postgres |
+| `DATABASE_URL_UNPOOLED` | Yes (Vercel) | Direct connection for migrations — set automatically by Vercel Neon/Postgres |
+| `DATABASE_URL` | Vercel sets this too | Present on Vercel but Prisma uses the two vars above |
 | `ADMIN_PASSWORD` | Yes | Password for `/admin` login |
 | `IP_HASH_SECRET` | Yes | Secret for HMAC-hashing client IPs (e.g. `openssl rand -hex 32`) |
+
+Locally, set `DATABASE_POSTGRES_PRISMA_URL` and `DATABASE_URL_UNPOOLED` to the same Postgres URL (or use `vercel env pull .env.local`).
 
 No IMI-related environment variables are required.
 
@@ -113,13 +117,16 @@ Open [http://localhost:3000](http://localhost:3000).
 
 ## Environment variables (Vercel)
 
-Add these in **Vercel → Project → Settings → Environment Variables** for Production (and Preview if desired):
+**Vercel Neon/Postgres storage** (already connected) automatically adds `DATABASE_POSTGRES_PRISMA_URL`, `DATABASE_URL_UNPOOLED`, `DATABASE_URL`, and related vars.
+
+You must add these manually in **Vercel → Settings → Environment Variables**:
 
 | Variable | Notes |
 |----------|-------|
-| `DATABASE_URL` | Use Vercel Postgres, Neon, Supabase, or another managed Postgres provider |
 | `ADMIN_PASSWORD` | Strong password for dashboard access |
 | `IP_HASH_SECRET` | Random 32+ byte hex string; **must stay stable** or historical IP hashes become incomparable |
+
+After adding storage or env vars, **redeploy** so serverless functions receive them. The build runs `prisma migrate deploy` to create tables automatically.
 
 ---
 
@@ -130,17 +137,19 @@ Add these in **Vercel → Project → Settings → Environment Variables** for P
 1. Push this repo to GitHub.
 2. In [Vercel](https://vercel.com), **Add New Project** → import `fusion-ai-uk/links-fusionagency-solutions`.
 3. Framework preset: **Next.js** (auto-detected).
-4. Add the three environment variables above.
-5. Deploy.
+4. Connect Vercel Postgres/Neon storage (adds database env vars automatically).
+5. Add `ADMIN_PASSWORD` and `IP_HASH_SECRET`.
+6. Deploy (migrations run during build).
 
-The build runs `prisma generate && next build` automatically via `package.json`.
+The build runs `prisma migrate deploy && prisma generate && next build` via `package.json`.
 
 ### Run migrations on production
 
 After the first deploy, run migrations against your production database:
 
 ```bash
-DATABASE_URL="your-production-url" npx prisma migrate deploy
+vercel env pull .env.local
+npx prisma migrate deploy
 ```
 
 Or use your provider's SQL console to apply `prisma/migrations/20250520000000_init/migration.sql`.
