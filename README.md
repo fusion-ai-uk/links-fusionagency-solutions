@@ -2,7 +2,7 @@
 
 Private **campaign-level** email open and click tracking for IMI marketing emails.
 
-**Production domain:** [https://links.vercel.app](https://links.vercel.app)
+**Production domain:** [https://links-record.vercel.app](https://links-record.vercel.app)
 
 This service logs estimated email opens via a 1×1 tracking pixel and CTA clicks via allowlisted redirect links. It includes a password-protected admin dashboard and CSV export.
 
@@ -160,16 +160,16 @@ Or use your provider's SQL console to apply `prisma/migrations/20250520000000_in
 
 The tracking service is served at the Vercel production URL:
 
-**https://links.vercel.app**
+**https://links-record.vercel.app**
 
 Use this base URL in all email HTML snippets and IMI handover docs. Routes are unchanged: `/o`, `/c/[linkId]`, `/admin`, `/health`.
 
 ### Verification after deploy
 
 Confirm:
-  - [https://links.vercel.app/health](https://links.vercel.app/health) returns `{ "status": "ok", ... }`
-  - [https://links.vercel.app/admin](https://links.vercel.app/admin) shows the login page
-  - [https://links.vercel.app/examples](https://links.vercel.app/examples) shows HTML snippets
+  - [https://links-record.vercel.app/health](https://links-record.vercel.app/health) returns `{ "status": "ok", ... }`
+  - [https://links-record.vercel.app/admin](https://links-record.vercel.app/admin) shows the login page
+  - [https://links-record.vercel.app/examples](https://links-record.vercel.app/examples) shows HTML snippets
 
 If you add a custom domain later, update the URLs in your email templates accordingly.
 
@@ -181,8 +181,9 @@ Edit `src/config/links.ts`:
 
 ```typescript
 export const linkDestinations: Record<string, string> = {
-  "hero-button": "https://yoursite.com/landing?utm_source=imi&...",
-  "secondary-cta": "https://yoursite.com/contact?utm_source=imi&...",
+  "see-recap": "https://hosted.bmj.com/gilead-lyvdelzi",
+  "access-full-data": "https://hosted.bmj.com/gilead-lyvdelzi",
+  "view-now-biochemical-levels": "https://hosted.bmj.com/gilead-lyvdelzi#biochemical-levels",
 };
 ```
 
@@ -205,7 +206,7 @@ export const linkDestinations: Record<string, string> = {
 - Do not add raw email addresses to URLs
 - **No IMI merge tags are needed**
 
-See also [/examples](https://links.vercel.app/examples) when deployed.
+See also [/examples](https://links-record.vercel.app/examples) when deployed.
 
 ---
 
@@ -214,21 +215,21 @@ See also [/examples](https://links.vercel.app/examples) when deployed.
 ### Open pixel
 
 ```html
-<img src="https://links.vercel.app/o?cid=CAMPAIGN_ID" width="1" height="1" alt="" style="width:1px;height:1px;border:0;display:block;" />
+<img src="https://links-record.vercel.app/o?cid=CAMPAIGN_ID" width="1" height="1" alt="" style="width:1px;height:1px;border:0;display:block;" />
 ```
 
 ### Tracked CTA
 
 ```html
-<a href="https://links.vercel.app/c/LINK_ID?cid=CAMPAIGN_ID">CTA text</a>
+<a href="https://links-record.vercel.app/c/LINK_ID?cid=CAMPAIGN_ID">CTA text</a>
 ```
 
 ### Real example
 
 ```html
-<img src="https://links.vercel.app/o?cid=imi-lyvdelzi-may-2026" width="1" height="1" alt="" style="width:1px;height:1px;border:0;display:block;" />
+<img src="https://links-record.vercel.app/o?cid=imi-lyvdelzi-may-2026" width="1" height="1" alt="" style="width:1px;height:1px;border:0;display:block;" />
 
-<a href="https://links.vercel.app/c/learn-more?cid=imi-lyvdelzi-may-2026">Learn more</a>
+<a href="https://links-record.vercel.app/c/see-recap?cid=imi-lyvdelzi-may-2026">See the recap</a>
 ```
 
 ---

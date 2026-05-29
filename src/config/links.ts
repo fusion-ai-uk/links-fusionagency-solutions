@@ -5,18 +5,26 @@
  * in tracked CTA URLs — arbitrary destination URLs in query strings are
  * never accepted (prevents open-redirect abuse).
  */
+const BMJ_LYVDELZI = "https://hosted.bmj.com/gilead-lyvdelzi";
+const BMJ_LYVDELZI_BIOCHEMICAL = "https://hosted.bmj.com/gilead-lyvdelzi#biochemical-levels";
+
 export const linkDestinations: Record<string, string> = {
-  "hero-button":
-    "https://example.com/landing-page?utm_source=imi&utm_medium=email&utm_campaign=test&utm_content=hero-button",
-  "learn-more":
-    "https://example.com/landing-page?utm_source=imi&utm_medium=email&utm_campaign=test&utm_content=learn-more",
-  "secondary-cta":
-    "https://example.com/contact?utm_source=imi&utm_medium=email&utm_campaign=test&utm_content=secondary-cta",
+  // imi-lyvdelzi-may-2026 — sent email CTAs
+  "see-recap": BMJ_LYVDELZI,
+  "access-full-data": BMJ_LYVDELZI,
+  "view-now-biochemical-levels": BMJ_LYVDELZI_BIOCHEMICAL,
+
+  // Fallback aliases (testing or alternate link IDs)
+  "learn-more": BMJ_LYVDELZI,
+  "hero-button": BMJ_LYVDELZI,
+  "access-data": BMJ_LYVDELZI,
+  "view-now": BMJ_LYVDELZI_BIOCHEMICAL,
 };
 
 /** Resolve a link ID to its destination URL, or null if not allowlisted. */
 export function getDestinationUrl(linkId: string): string | null {
-  return linkDestinations[linkId] ?? null;
+  const normalized = decodeURIComponent(linkId).trim();
+  return linkDestinations[normalized] ?? null;
 }
 
 /** All configured link IDs (useful for admin/docs). */

@@ -43,11 +43,13 @@ export default function ExamplesPage() {
         <code>{`<a href="${BASE}/c/LINK_ID?cid=CAMPAIGN_ID">CTA text</a>`}</code>
       </pre>
 
-      <h2>Real example</h2>
+      <h2>Real example (imi-lyvdelzi-may-2026)</h2>
       <pre>
         <code>{`<img src="${BASE}/o?cid=${EXAMPLE_CAMPAIGN}" width="1" height="1" alt="" style="width:1px;height:1px;border:0;display:block;" />
 
-<a href="${BASE}/c/learn-more?cid=${EXAMPLE_CAMPAIGN}">Learn more</a>`}</code>
+<a href="${BASE}/c/see-recap?cid=${EXAMPLE_CAMPAIGN}">See the recap</a>
+<a href="${BASE}/c/access-full-data?cid=${EXAMPLE_CAMPAIGN}">Access full data</a>
+<a href="${BASE}/c/view-now-biochemical-levels?cid=${EXAMPLE_CAMPAIGN}">View now</a>`}</code>
       </pre>
 
       <h2>Instructions for the email HTML build</h2>

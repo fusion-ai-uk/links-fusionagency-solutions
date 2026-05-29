@@ -28,6 +28,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
 
   const params = parseTrackingParams(request.nextUrl.searchParams);
 
+  // Fire-and-forget — redirect must not wait on DB; logging errors are swallowed in logEmailEvent
   void logEmailEvent({
     eventType: "click",
     campaignId: params.campaignId,
@@ -38,5 +39,6 @@ export async function GET(request: NextRequest, context: RouteContext) {
     request,
   });
 
+  // Immediate redirect for valid link IDs — never show a tracking page
   return NextResponse.redirect(destinationUrl, 302);
 }
