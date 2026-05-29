@@ -18,18 +18,25 @@ type RouteContext = {
 export async function GET(request: NextRequest, context: RouteContext) {
   const { linkId } = await context.params;
   const destinationUrl = getDestinationUrl(linkId);
+  const params = parseTrackingParams(request.nextUrl.searchParams);
 
+  console.log(
+    `[click] linkId=${linkId} cid=${params.campaignId} destination=${destinationUrl ?? "NONE"}`
+  );
+
+  // Unknown link ID — never redirect to a user-supplied URL.
   if (!destinationUrl) {
+    console.warn(`[click] unknown link ID "${linkId}" — returning 404`);
     return NextResponse.json(
       { error: "Unknown or unconfigured link ID" },
       { status: 404 }
     );
   }
 
-  const params = parseTrackingParams(request.nextUrl.searchParams);
-
-  // Fire-and-forget — redirect must not wait on DB; logging errors are swallowed in logEmailEvent
-  void logEmailEvent({
+  // Await the write so it completes before the serverless function is frozen.
+  // logEmailEvent swallows its own errors, so a DB failure never blocks the redirect.
+  console.log(`[click] logging click event for linkId=${linkId}…`);
+  const logged = await logEmailEvent({
     eventType: "click",
     campaignId: params.campaignId,
     recipientToken: params.recipientToken,
@@ -38,7 +45,10 @@ export async function GET(request: NextRequest, context: RouteContext) {
     destinationUrl,
     request,
   });
+  console.log(
+    `[click] db write ${logged ? "succeeded" : "FAILED"} — redirecting to ${destinationUrl}`
+  );
 
-  // Immediate redirect for valid link IDs — never show a tracking page
+  // Immediate redirect for valid link IDs — never show a tracking page.
   return NextResponse.redirect(destinationUrl, 302);
 }

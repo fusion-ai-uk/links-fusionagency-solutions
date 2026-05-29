@@ -46,10 +46,17 @@ export interface LogEventInput {
 }
 
 /**
- * Persist a tracking event. Errors are logged but never propagated to callers
- * so tracking endpoints always return pixels/redirects even if DB is down.
+ * Persist a tracking event. Errors are logged (console.error → Vercel logs) but
+ * never propagated, so tracking endpoints always return pixels/redirects even
+ * if the DB is down.
+ *
+ * IMPORTANT: callers must `await` this before returning their response. On
+ * Vercel serverless, fire-and-forget promises are killed once the response is
+ * sent, which silently drops the DB write.
+ *
+ * @returns true if the row was written, false if the write failed.
  */
-export async function logEmailEvent(input: LogEventInput): Promise<void> {
+export async function logEmailEvent(input: LogEventInput): Promise<boolean> {
   const {
     request,
     eventType,
@@ -65,7 +72,7 @@ export async function logEmailEvent(input: LogEventInput): Promise<void> {
   const geo = getGeoFromHeaders(request);
 
   try {
-    await prisma.emailEvent.create({
+    const created = await prisma.emailEvent.create({
       data: {
         eventType,
         campaignId,
@@ -81,8 +88,16 @@ export async function logEmailEvent(input: LogEventInput): Promise<void> {
         isBot: isBotUserAgent(userAgent),
       },
     });
+    console.log(
+      `[tracking] wrote ${eventType} event id=${created.id} campaign=${campaignId} link=${linkId ?? "-"}`
+    );
+    return true;
   } catch (error) {
-    console.error("[tracking] Failed to log event:", error);
+    console.error(
+      `[tracking] FAILED to write ${eventType} event campaign=${campaignId} link=${linkId ?? "-"}:`,
+      error
+    );
+    return false;
   }
 }
 
