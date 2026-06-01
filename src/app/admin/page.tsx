@@ -1,8 +1,12 @@
 import { redirect } from "next/navigation";
 import { isAdminAuthenticated } from "@/lib/auth";
-import { getDashboardStats } from "@/lib/dashboard";
+import { getDashboardStats, type DashboardStats } from "@/lib/dashboard";
 import { logoutAction } from "./actions";
 import styles from "./admin.module.css";
+
+// Always render on demand; never prerender (depends on cookies + live DB).
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 type PageProps = {
   searchParams: Promise<{ campaign?: string }>;
@@ -15,12 +19,54 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
   }
 
   const { campaign } = await searchParams;
-  const stats = await getDashboardStats(campaign);
+
+  // Never let a DB outage crash the dashboard with a raw server-side exception.
+  let stats: DashboardStats | null = null;
+  let dbError: string | null = null;
+  try {
+    stats = await getDashboardStats(campaign);
+  } catch (error) {
+    dbError = error instanceof Error ? error.message : String(error);
+    console.error("[admin] getDashboardStats failed:", error);
+  }
 
   const exportHref =
     campaign && campaign !== "all"
       ? `/admin/export.csv?campaign=${encodeURIComponent(campaign)}`
       : "/admin/export.csv";
+
+  if (!stats) {
+    return (
+      <div className={styles.page}>
+        <header className={styles.header}>
+          <div>
+            <h1>Email Tracking Dashboard</h1>
+            <p className={styles.subtitle}>Fusion Agency Solutions — campaign-level metrics</p>
+          </div>
+          <form action={logoutAction}>
+            <button type="submit" className={styles.buttonSecondary}>
+              Log out
+            </button>
+          </form>
+        </header>
+        <div className={styles.errorBanner}>
+          <h2>Database unavailable</h2>
+          <p>
+            The dashboard could not reach the database, so no metrics can be shown
+            right now. Tracking events cannot be recorded until this is restored.
+          </p>
+          <p>
+            Check that the Postgres/Neon database is active and connected in Vercel
+            (Storage), then redeploy. Verify <code>/health</code> returns{" "}
+            <code>{`{"database":"connected"}`}</code>.
+          </p>
+          {dbError && (
+            <pre className={styles.errorDetail}>{dbError}</pre>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={styles.page}>

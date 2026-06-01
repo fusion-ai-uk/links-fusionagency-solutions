@@ -4,6 +4,35 @@
   padding: 2rem 1.5rem 3rem;
 }
 
+.errorBanner {
+  padding: 1.5rem;
+  background: #fef2f2;
+  border: 1px solid #fca5a5;
+  border-radius: 10px;
+  color: #7f1d1d;
+}
+
+.errorBanner h2 {
+  margin: 0 0 0.5rem;
+  font-size: 1.2rem;
+}
+
+.errorBanner p {
+  margin: 0 0 0.75rem;
+  line-height: 1.6;
+}
+
+.errorDetail {
+  margin: 0.5rem 0 0;
+  padding: 0.75rem;
+  background: #1f2937;
+  color: #f9fafb;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .header {
   display: flex;
   align-items: flex-start;
