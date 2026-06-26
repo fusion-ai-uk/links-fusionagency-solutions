@@ -49,6 +49,7 @@ export const campaignLinkDestinations: Record<string, LinkDestinationMap> = {
     "featured-symposium-video": BMJ_AIDS_2026,
     "explore-the-talks": BMJ_AIDS_2026,
     "explore-aids2026-highlights": BMJ_AIDS_2026,
+    "continue_the_conversation": BMJ_AIDS_2026,
   },
 
   // Wave placeholder (fill when final HTML/links are ready)
