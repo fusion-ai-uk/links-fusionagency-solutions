@@ -17,8 +17,8 @@ type RouteContext = {
  */
 export async function GET(request: NextRequest, context: RouteContext) {
   const { linkId } = await context.params;
-  const destinationUrl = getDestinationUrl(linkId);
   const params = parseTrackingParams(request.nextUrl.searchParams);
+  const destinationUrl = getDestinationUrl(linkId, params.campaignId);
 
   console.log(
     `[click] linkId=${linkId} cid=${params.campaignId} destination=${destinationUrl ?? "NONE"}`

@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { isAdminAuthenticated } from "@/lib/auth";
 import { getDashboardStats, type DashboardStats } from "@/lib/dashboard";
+import { getCampaignOptions } from "@/config/campaigns";
 import { logoutAction } from "./actions";
 import styles from "./admin.module.css";
 
@@ -68,6 +69,8 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
     );
   }
 
+  const campaignOptions = getCampaignOptions(stats.campaigns);
+
   return (
     <div className={styles.page}>
       <header className={styles.header}>
@@ -91,9 +94,9 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
         <label htmlFor="campaign">Campaign filter</label>
         <select id="campaign" name="campaign" defaultValue={campaign ?? "all"}>
           <option value="all">All campaigns</option>
-          {stats.campaigns.map((id) => (
-            <option key={id} value={id}>
-              {id}
+          {campaignOptions.map((option) => (
+            <option key={option.id} value={option.id}>
+              {option.label}
             </option>
           ))}
         </select>

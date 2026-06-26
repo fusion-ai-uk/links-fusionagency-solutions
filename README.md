@@ -177,18 +177,20 @@ If you add a custom domain later, update the URLs in your email templates accord
 
 ## Adding / updating tracked links
 
-Edit `src/config/links.ts`:
+Edit `src/config/links.ts` and add/update entries under `campaignLinkDestinations`:
 
 ```typescript
-export const linkDestinations: Record<string, string> = {
-  "see-recap": "https://hosted.bmj.com/gilead-lyvdelzi",
-  "access-full-data": "https://hosted.bmj.com/gilead-lyvdelzi",
-  "view-now-biochemical-levels": "https://hosted.bmj.com/gilead-lyvdelzi#biochemical-levels",
+export const campaignLinkDestinations = {
+  "imi-aids2026-pre-email-jun-2026": {
+    "read-more": "https://hosted.bmj.com/gilead-aids2026",
+    "learn-more": "https://hosted.bmj.com/gilead-aids2026",
+  },
 };
 ```
 
-- **Key** = link ID used in URLs: `/c/hero-button?cid=...`
-- **Value** = full destination URL (include UTM params here)
+- **Campaign ID** (`cid`) identifies the wave in reporting
+- **Key** = link ID used in URLs: `/c/LINK_ID?cid=CAMPAIGN_ID`
+- **Value** = final destination URL
 - Commit and redeploy after changes
 
 **Security:** Destination URLs are **never** taken from query strings. Unknown link IDs return 404. This prevents open-redirect abuse.
@@ -207,6 +209,75 @@ export const linkDestinations: Record<string, string> = {
 - **No IMI merge tags are needed**
 
 See also [/examples](https://links-record.vercel.app/examples) when deployed.
+
+---
+
+## Steve handover: AIDS 2026 pre-email
+
+Use this campaign ID for the pre-email wave:
+
+- `imi-aids2026-pre-email-jun-2026`
+
+Tracked URLs for this wave:
+
+- Open pixel:
+  - `https://links-record.vercel.app/o?cid=imi-aids2026-pre-email-jun-2026`
+- CTA links:
+  - `https://links-record.vercel.app/c/read-more?cid=imi-aids2026-pre-email-jun-2026`
+  - `https://links-record.vercel.app/c/learn-more?cid=imi-aids2026-pre-email-jun-2026`
+
+What Steve should change in the supplied HTML:
+
+1. Replace each `href="https://hosted.bmj.com/gilead-aids2026"` CTA with one of:
+   - `.../c/read-more?cid=imi-aids2026-pre-email-jun-2026`
+   - `.../c/learn-more?cid=imi-aids2026-pre-email-jun-2026`
+2. Add this tracking pixel once near the bottom, before `</body>`:
+
+```html
+<img src="https://links-record.vercel.app/o?cid=imi-aids2026-pre-email-jun-2026" width="1" height="1" alt="" style="width:1px;height:1px;border:0;display:block;" />
+```
+
+3. Do **not** alter unsubscribe / preference centre / legal links.
+
+Wave placeholders already configured for filtering/setup:
+
+- `imi-aids2026-wave-2`
+- `imi-aids2026-wave-3`
+
+Populate their link IDs in `src/config/links.ts` when those two HTMLs are ready.
+
+---
+
+## Steve handover: AIDS 2026 post-congress
+
+Use this campaign ID for the post-congress wave:
+
+- `imi-aids2026-post-congress-jul-2026`
+
+Tracked URLs for this wave:
+
+- Open pixel:
+  - `https://links-record.vercel.app/o?cid=imi-aids2026-post-congress-jul-2026`
+- CTA links:
+  - `https://links-record.vercel.app/c/watch-the-symposium?cid=imi-aids2026-post-congress-jul-2026`
+  - `https://links-record.vercel.app/c/featured-symposium-video?cid=imi-aids2026-post-congress-jul-2026`
+  - `https://links-record.vercel.app/c/explore-the-talks?cid=imi-aids2026-post-congress-jul-2026`
+  - `https://links-record.vercel.app/c/explore-aids2026-highlights?cid=imi-aids2026-post-congress-jul-2026`
+
+What Steve should change in the supplied HTML:
+
+1. Replace each `href="https://hosted.bmj.com/gilead-aids2026"` CTA with:
+   - `watch_the_symposium.png` button -> `.../c/watch-the-symposium?cid=imi-aids2026-post-congress-jul-2026`
+   - `video_thumbnail.png` image -> `.../c/featured-symposium-video?cid=imi-aids2026-post-congress-jul-2026`
+   - `explore_the_talks.png` button -> `.../c/explore-the-talks?cid=imi-aids2026-post-congress-jul-2026`
+   - `explore_gilead_aids2026_highlights_30.png` button -> `.../c/explore-aids2026-highlights?cid=imi-aids2026-post-congress-jul-2026`
+2. Add this tracking pixel once near the bottom, before `</body>`:
+
+```html
+<img src="https://links-record.vercel.app/o?cid=imi-aids2026-post-congress-jul-2026" width="1" height="1" alt="" style="width:1px;height:1px;border:0;display:block;" />
+```
+
+3. Do **not** alter unsubscribe / preference centre / legal links.
 
 ---
 
