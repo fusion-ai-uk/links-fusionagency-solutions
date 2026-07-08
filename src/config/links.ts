@@ -38,6 +38,7 @@ export const campaignLinkDestinations: Record<string, LinkDestinationMap> = {
   // New wave: AIDS 2026 pre-email
   "imi-aids2026-pre-email-jun-2026": {
     "read-more": BMJ_AIDS_2026,
+    "read-more1": BMJ_AIDS_2026,
     "read-more-1": BMJ_AIDS_2026,
     "read-more-2": BMJ_AIDS_2026,
     "learn-more": BMJ_AIDS_2026,
