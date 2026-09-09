@@ -1,12 +1,13 @@
 "use server";
 
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import {
   ADMIN_SESSION_COOKIE,
   getSessionCookieValue,
   verifyCredentials,
 } from "@/lib/auth";
+import { checkLoginAllowed, loginKeys, recordLoginAttempt } from "@/lib/rate-limit";
 
 export async function loginAction(formData: FormData) {
   const email = formData.get("email");
@@ -16,7 +17,18 @@ export async function loginAction(formData: FormData) {
     redirect("/admin/login?error=1");
   }
 
+  // Throttle before checking the password, so guessing is slowed whether or
+  // not the address exists.
+  const requestHeaders = await headers();
+  const keys = loginKeys(email, { headers: requestHeaders });
+  const limit = await checkLoginAllowed(keys);
+  if (!limit.allowed) {
+    redirect(`/admin/login?error=locked&mins=${limit.retryAfterMinutes}`);
+  }
+
   const user = verifyCredentials(email, password);
+  await recordLoginAttempt(keys, user !== null);
+
   if (!user) {
     // Deliberately the same message for an unknown address and a wrong
     // password, so the form does not confirm who has an account.

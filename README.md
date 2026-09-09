@@ -296,10 +296,25 @@ password. Consequences worth knowing:
 - Sessions last 7 days. Cookies are `httpOnly`, `sameSite=lax`, and `secure`
   in production.
 
-**Known limitation:** there is no rate limiting on sign-in attempts. Passwords
-should therefore be strong enough that online guessing is impractical — a
-three-word passphrase plus digits is roughly 35 bits, which is about 54 years at
-ten attempts a second. Do not reduce them to a single word.
+### Sign-in throttling
+
+Repeated failures are slowed down using a `login_attempts` table, so the limit
+holds across serverless instances: **5 failures per email address** or **20 per
+client address** within a 15-minute sliding window, after which the form
+answers "Too many sign-in attempts" with the minutes to wait. A successful
+sign-in clears that address's failures. The lock-out message is the same for
+unknown and known addresses, and the client address is stored hashed. If the
+database is unreachable the password check still stands on its own — throttling
+never blocks a legitimate sign-in.
+
+### Security headers
+
+Every response carries a plain content-security-policy (self-hosted scripts,
+styles and fonts only; no external calls), `X-Frame-Options: DENY`,
+`X-Content-Type-Options: nosniff`, a strict referrer policy, a restrictive
+permissions policy and HSTS. See `next.config.ts`. The admin area also has a
+branded error boundary, so a fault shows an explanation and a way back rather
+than a stack trace.
 
 ---
 
@@ -646,6 +661,9 @@ Use opens as a directional signal; rely on click tracking for stronger engagemen
 | `accept_language`, `accept_header` | Request headers, truncated to 200 chars |
 | `sec_fetch_mode`, `sec_fetch_dest`, `sec_fetch_user`, `sec_fetch_site` | Browser fetch metadata; NULL when absent |
 | `created_at` | Event timestamp |
+
+`login_attempts` table: `id`, `key` (`email:<address>` or `ip:<hash>`),
+`success`, `attempted_at` — see Sign-in throttling.
 | `recipient_token` | Nullable legacy field (not used by default) |
 | `message_id` | Nullable legacy field (not used by default) |
 
@@ -686,6 +704,7 @@ src/
     triage.ts               # Phase (test/pre-send/live) and reason per event
     view.ts                 # Dashboard view model: signal classes and figures
     time.ts                 # UK-time formatting
+    rate-limit.ts           # Sign-in throttling
     request-hints.ts        # Sec-Fetch capture and client_kind
     bot-detect.ts           # Bot patterns with reasons
     programme-view.ts       # Programme scoping + wave table view model

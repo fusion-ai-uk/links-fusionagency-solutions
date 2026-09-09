@@ -22,41 +22,7 @@ function includesUnknown(campaignIds: string[]): boolean {
   return campaignIds.includes(UNKNOWN_CAMPAIGN);
 }
 
-/** WHERE clause for raw SQL, including the leading `WHERE` (or empty). */
-export function buildRawWhere(filters: DashboardFilters): Prisma.Sql {
-  const clauses: Prisma.Sql[] = [];
-  const { campaignIds, excludeBots, liveWindows } = filters;
-
-  if (campaignIds) {
-    if (campaignIds.length === 0) {
-      clauses.push(Prisma.sql`false`);
-    } else {
-      clauses.push(
-        Prisma.sql`COALESCE(campaign_id, ${UNKNOWN_CAMPAIGN}) IN (${Prisma.join(
-          campaignIds
-        )})`
-      );
-    }
-  }
-
-  if (excludeBots) {
-    clauses.push(Prisma.sql`is_bot = false`);
-  }
-
-  if (liveWindows && liveWindows.length > 0) {
-    const exclusions = liveWindows.map((w) =>
-      w.from
-        ? Prisma.sql`(campaign_id = ${w.campaignId} AND created_at < ${w.from})`
-        : Prisma.sql`(campaign_id = ${w.campaignId})`
-    );
-    clauses.push(Prisma.sql`NOT (${Prisma.join(exclusions, " OR ")})`);
-  }
-
-  if (clauses.length === 0) return Prisma.empty;
-  return Prisma.sql`WHERE ${Prisma.join(clauses, " AND ")}`;
-}
-
-/** Equivalent filter for the Prisma query builder. */
+/** Filter for the Prisma query builder (used by the CSV export). */
 export function buildEventWhere(
   filters: DashboardFilters
 ): Prisma.EmailEventWhereInput {

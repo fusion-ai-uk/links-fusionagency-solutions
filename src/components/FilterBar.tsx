@@ -304,6 +304,15 @@ export default function FilterBar(props: FilterBarProps) {
       <p className={styles.summary}>
         <Icon name="eye" size={12} /> {props.summary}
       </p>
+
+      {/* Announced to screen readers; visually the summary line above says the same. */}
+      <span
+        role="status"
+        aria-live="polite"
+        style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0 0 0 0)", whiteSpace: "nowrap" }}
+      >
+        {pending ? "Updating figures" : `Showing ${props.summary}`}
+      </span>
     </div>
   );
 }

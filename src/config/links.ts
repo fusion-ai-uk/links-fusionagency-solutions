@@ -150,15 +150,3 @@ export function getCampaignLinkMap(
   return campaignLinkDestinations[baseCampaignId(campaignId)] ?? null;
 }
 
-/** All configured link IDs (optionally scoped to a specific campaign). */
-export function getLinkIds(campaignId?: string): string[] {
-  if (campaignId) {
-    return getCampaignLinkIds(campaignId);
-  }
-
-  const ids = new Set<string>(Object.keys(defaultLinkDestinations));
-  for (const map of Object.values(campaignLinkDestinations)) {
-    for (const key of Object.keys(map)) ids.add(key);
-  }
-  return Array.from(ids).sort();
-}

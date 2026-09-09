@@ -12,7 +12,14 @@ import {
   type Programme,
 } from "@/config/programmes";
 import { getCampaignLinkIds, getCampaignLinkMap } from "@/config/links";
-import type { CampaignMetrics } from "@/lib/dashboard";
+/** Per-email counts carried on a table row. The dashboard fills these from the view model. */
+export interface CampaignMetrics {
+  campaignId: string;
+  opens: number;
+  clicks: number;
+  approxUniqueOpens: number;
+  approxUniqueClicks: number;
+}
 
 export const ZERO_METRICS: Omit<CampaignMetrics, "campaignId"> = {
   opens: 0,

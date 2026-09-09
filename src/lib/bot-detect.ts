@@ -42,10 +42,6 @@ export function detectBot(userAgent: string | null | undefined): BotVerdict {
   return { isBot: false, reason: null };
 }
 
-export function isBotUserAgent(userAgent: string | null | undefined): boolean {
-  return detectBot(userAgent).isBot;
-}
-
 /** Human-readable explanation for a bot reason, for tooltips and tables. */
 export const BOT_REASON_LABELS: Record<string, string> = {
   "google-image-proxy": "Gmail image proxy — Google fetched the pixel on the recipient's behalf",

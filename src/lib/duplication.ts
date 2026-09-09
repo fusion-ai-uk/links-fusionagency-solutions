@@ -1,6 +1,3 @@
-import { prisma } from "@/lib/prisma";
-import { buildEventWhere, type DashboardFilters } from "@/lib/event-filters";
-
 /**
  * Near-simultaneous click clustering.
  *
@@ -316,44 +313,6 @@ export function summariseClusters(
     echoesWithoutHintData: echoes.filter(({ event }) => event.clientKind === null)
       .length,
   };
-}
-
-/** Load every click in scope and cluster it. */
-export async function loadClickClusters(
-  filters: DashboardFilters,
-  windowSeconds: number = DEFAULT_ECHO_WINDOW_SECONDS
-): Promise<ClickCluster[]> {
-  const rows = await prisma.emailEvent.findMany({
-    where: {
-      ...buildEventWhere(filters),
-      eventType: "click",
-      linkId: { not: null },
-    },
-    orderBy: { createdAt: "asc" },
-    select: {
-      id: true,
-      campaignId: true,
-      linkId: true,
-      ipHash: true,
-      ipCountry: true,
-      ipRegion: true,
-      ipCity: true,
-      userAgent: true,
-      isBot: true,
-      botReason: true,
-      clientKind: true,
-      secFetchUser: true,
-      createdAt: true,
-    },
-  });
-
-  const events: ClickEvent[] = rows.map((row) => ({
-    ...row,
-    campaignId: row.campaignId ?? "unknown",
-    linkId: row.linkId ?? "unknown",
-  }));
-
-  return clusterClicks(events, windowSeconds);
 }
 
 export function parseEchoWindow(value: string | undefined): number {

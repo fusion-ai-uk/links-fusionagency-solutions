@@ -3,7 +3,7 @@ import { loginAction } from "../actions";
 import styles from "../admin.module.css";
 
 type PageProps = {
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; mins?: string }>;
 };
 
 /**
@@ -24,7 +24,8 @@ type PageProps = {
 const TAGLINE = "Deep expertise | Machine speed | Every stage of the lifecycle";
 
 export default async function AdminLoginPage({ searchParams }: PageProps) {
-  const { error } = await searchParams;
+  const { error, mins } = await searchParams;
+  const lockedMinutes = Math.max(1, Math.min(60, Number(mins) || 1));
 
   return (
     <div className={styles.loginPage}>
@@ -46,6 +47,12 @@ export default async function AdminLoginPage({ searchParams }: PageProps) {
           <p className={styles.error} role="alert">
             Those details were not recognised. Check the email address and
             password, and try again.
+          </p>
+        )}
+        {error === "locked" && (
+          <p className={styles.error} role="alert">
+            Too many sign-in attempts. Try again in about {lockedMinutes}{" "}
+            minute{lockedMinutes === 1 ? "" : "s"}.
           </p>
         )}
         {error === "config" && (

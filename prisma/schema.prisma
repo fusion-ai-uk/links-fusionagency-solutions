@@ -49,3 +49,17 @@ model EmailEvent {
   @@index([campaignId, linkId, createdAt])
   @@map("email_events")
 }
+
+/// Sign-in attempts, kept briefly so repeated guessing can be slowed down
+/// across serverless instances. Rows older than the window are irrelevant and
+/// are pruned opportunistically.
+model LoginAttempt {
+  id          String   @id @default(cuid())
+  /// "email:<lower-cased address>" or "ip:<hashed ip>"
+  key         String
+  success     Boolean
+  attemptedAt DateTime @default(now()) @map("attempted_at")
+
+  @@index([key, attemptedAt])
+  @@map("login_attempts")
+}
