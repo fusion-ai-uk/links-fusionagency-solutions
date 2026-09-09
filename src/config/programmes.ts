@@ -65,16 +65,16 @@ export const PROGRAMMES: Programme[] = [
     brand: "AmBisome",
     description:
       "Five-email programme sent via IMI. No recipient IDs or merge tags are " +
-      "provided, so tracking is campaign-level only. All five HTMLs are in " +
-      "approval — link IDs and destinations are deliberately left empty until " +
-      "each final HTML lands.",
+      "provided, so tracking is campaign-level only. Emails are configured " +
+      "one at a time as each approved HTML lands.",
     campaigns: [
       {
         id: "gilead-ambisome-email-1",
-        label: "AmBisome Email 1",
-        status: "planned",
-        sendDate: null,
-        notes: "Awaiting approved HTML and destination URLs.",
+        label: "AmBisome Email 1 (Fungi Now wave 1)",
+        status: "ready",
+        sendDate: "September 2026",
+        notes:
+          "Fungi Now episode 1. Two CTAs to the touchinfectiousdiseases.com episode page, one to the Lancet Microbe paper.",
       },
       {
         id: "gilead-ambisome-email-2",

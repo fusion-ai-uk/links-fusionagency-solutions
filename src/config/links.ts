@@ -14,6 +14,10 @@ const BMJ_LYVDELZI = "https://hosted.bmj.com/gilead-lyvdelzi";
 const BMJ_LYVDELZI_BIOCHEMICAL =
   "https://hosted.bmj.com/gilead-lyvdelzi#biochemical-levels";
 const BMJ_AIDS_2026 = "https://hosted.bmj.com/gilead-aids2026";
+const TOUCH_ID_FUNGI_NOW_EP1 =
+  "https://touchinfectiousdiseases.com/sepsis/learning-zone/fungi-now-timely-insights-for-sharper-clinical-decision-making/?video_id=5e7qd9ryrs";
+const LANCET_MICROBE_FUNGAL_2024 =
+  "https://www.thelancet.com/journals/lanmic/article/PIIS2666-5247(24)00039-9/fulltext";
 const TOUCH_ID_COVID_WEBINAR =
   "https://touchinfectiousdiseases.com/covid-19/learning-zone/evolving-management-of-covid-19-in-hospitalised-patients-evidence-experience-and-practice/?video_id=liwhmie1y0";
 
@@ -38,10 +42,18 @@ export const defaultLinkDestinations: LinkDestinationMap = {
  * Add each new wave with a unique campaign ID and explicit link IDs.
  */
 export const campaignLinkDestinations: Record<string, LinkDestinationMap> = {
-  // --- Gilead AmBisome -----------------------------------------------------
-  // Five emails in approval. Populate one at a time as each final HTML lands,
-  // then hand the generated URLs to the email build (/admin/setup/<cid>).
-  "gilead-ambisome-email-1": {},
+  // --- Gilead AmBisome (via IMI) -------------------------------------------
+  // Populate one at a time as each final HTML lands, then hand the generated
+  // URLs to the email build (/admin/setup/<cid>).
+  // Email 1 (build file "Fungi Now Wave 1"): three CTAs.
+  "gilead-ambisome-email-1": {
+    // Episode 1 play-button image, upper body
+    "episode-1-thumbnail": TOUCH_ID_FUNGI_NOW_EP1,
+    // "Watch Episode 1 >" text button
+    "watch-episode-1": TOUCH_ID_FUNGI_NOW_EP1,
+    // "Read the full publication here" — Lancet Microbe 2024
+    "read-publication": LANCET_MICROBE_FUNGAL_2024,
+  },
   "gilead-ambisome-email-2": {},
   "gilead-ambisome-email-3": {},
   "gilead-ambisome-email-4": {},
