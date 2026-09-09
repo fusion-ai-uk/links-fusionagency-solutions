@@ -235,6 +235,10 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
 
   const awaitingSetup = allRows.filter((row) => !row.hasTrackedLinks).length;
   const hasAnyEvents = stats.totalOpens > 0 || stats.totalClicks > 0;
+  // Test sends are hidden by default; say so when there is something to see.
+  const hiddenTestEvents = includeTests
+    ? 0
+    : testMetrics.reduce((sum, m) => sum + m.opens + m.clicks, 0);
 
   // A plain-words summary of what is currently on screen.
   const summaryParts = [
@@ -620,6 +624,21 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
           </div>
         )}
 
+        {hiddenTestEvents > 0 && (
+          <p className={styles.emptyState} style={{ marginTop: "1rem" }}>
+            <strong>
+              {hiddenTestEvents} test event{hiddenTestEvents === 1 ? "" : "s"}{" "}
+              recorded for this view — hidden from the figures.
+            </strong>{" "}
+            Test sends use the <code>-test</code> campaign ID and are kept out
+            of live reporting.{" "}
+            <Link href={dashboardHref({ ...params, tests: "include" })}>
+              Show test sends →
+            </Link>{" "}
+            or open an email&rsquo;s <em>Set up</em> page to see each test
+            click by link.
+          </p>
+        )}
         {!hasAnyEvents && (
           <p className={styles.emptyState} style={{ marginTop: "1rem" }}>
             <strong>No tracking events recorded in this view yet.</strong> That

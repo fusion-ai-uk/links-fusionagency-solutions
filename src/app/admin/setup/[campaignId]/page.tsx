@@ -2,6 +2,12 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
 import { getCampaignMetrics, type CampaignMetrics } from "@/lib/dashboard";
+import {
+  describeUserAgent,
+  getClicksByLinkForCampaigns,
+  getRecentEventsForCampaigns,
+  type CampaignEvent,
+} from "@/lib/campaign-events";
 import { getCampaignLinkMap } from "@/config/links";
 import {
   CAMPAIGN_STATUS_LABELS,
@@ -47,6 +53,10 @@ function findMetrics(
   );
 }
 
+function fmtTime(date: Date): string {
+  return date.toISOString().replace("T", " ").slice(0, 19);
+}
+
 export default async function CampaignSetupPage({ params }: PageProps) {
   const user = await getCurrentUser();
   if (!user) {
@@ -64,18 +74,29 @@ export default async function CampaignSetupPage({ params }: PageProps) {
 
   let metrics = emptyMetrics(campaignId);
   let testMetrics = emptyMetrics(testCampaignId);
+  let recent: CampaignEvent[] = [];
+  let clicksByLink = new Map<string, Map<string, number>>();
   let dbError: string | null = null;
 
   try {
-    const rows = await getCampaignMetrics({
-      campaignIds: [campaignId, testCampaignId],
-    });
+    const [rows, recentRows, byLink] = await Promise.all([
+      getCampaignMetrics({ campaignIds: [campaignId, testCampaignId] }),
+      getRecentEventsForCampaigns([campaignId, testCampaignId], 30),
+      getClicksByLinkForCampaigns([campaignId, testCampaignId]),
+    ]);
     metrics = findMetrics(rows, campaignId);
     testMetrics = findMetrics(rows, testCampaignId);
+    recent = recentRows;
+    clicksByLink = byLink;
   } catch (error) {
     dbError = error instanceof Error ? error.message : String(error);
     console.error("[admin/setup] metrics query failed:", error);
   }
+
+  const testByLink = clicksByLink.get(testCampaignId) ?? new Map<string, number>();
+  const liveByLink = clicksByLink.get(campaignId) ?? new Map<string, number>();
+  const linksClickedInTest = linkIds.filter((id) => (testByLink.get(id) ?? 0) > 0);
+  const unexpectedTestLinks = [...testByLink.keys()].filter((id) => !linkIds.includes(id));
 
   const label = definition?.label ?? campaignId;
   const programmeLabel = programme?.label ?? "Unassigned";
@@ -96,6 +117,11 @@ export default async function CampaignSetupPage({ params }: PageProps) {
   "read-more": "https://example.com/landing-page",
   "watch-video": "https://example.com/landing-page#video",
 },`;
+
+  const testVerified =
+    linkIds.length > 0
+      ? linksClickedInTest.length === linkIds.length && testMetrics.opens > 0
+      : testMetrics.opens + testMetrics.clicks > 0;
 
   const checklist: { done: boolean; text: string }[] = [
     {
@@ -122,18 +148,15 @@ export default async function CampaignSetupPage({ params }: PageProps) {
       text: "Tracking pack handed to the email build",
     },
     {
-      done: testMetrics.opens + testMetrics.clicks > 0,
-      text: `Test send verified — ${testMetrics.opens} open${
-        testMetrics.opens === 1 ? "" : "s"
-      } and ${testMetrics.clicks} click${
-        testMetrics.clicks === 1 ? "" : "s"
-      } recorded against ${testCampaignId}`,
+      done: testVerified,
+      text:
+        linkIds.length > 0
+          ? `Test send verified — ${testMetrics.opens} test open${testMetrics.opens === 1 ? "" : "s"}, ${linksClickedInTest.length} of ${linkIds.length} links clicked in test`
+          : `Test send verified — ${testMetrics.opens} open${testMetrics.opens === 1 ? "" : "s"}, ${testMetrics.clicks} click${testMetrics.clicks === 1 ? "" : "s"} on ${testCampaignId}`,
     },
     {
       done: metrics.opens + metrics.clicks > 0,
-      text: `Live events received — ${metrics.opens} open${
-        metrics.opens === 1 ? "" : "s"
-      } and ${metrics.clicks} click${metrics.clicks === 1 ? "" : "s"}`,
+      text: `Live events received — ${metrics.opens} open${metrics.opens === 1 ? "" : "s"} and ${metrics.clicks} click${metrics.clicks === 1 ? "" : "s"}`,
     },
   ];
 
@@ -150,9 +173,8 @@ export default async function CampaignSetupPage({ params }: PageProps) {
           </span>
           <h1>{label}</h1>
           <p className={styles.subtitle}>
-            Everything the email build needs for this one email: the open
-            tracking pixel, the tracked link URLs, and a copy-ready handover
-            block.
+            Everything the email build needs for this one email, and everything
+            recorded against it so far — test and live, side by side.
           </p>
         </div>
       </header>
@@ -247,6 +269,162 @@ export default async function CampaignSetupPage({ params }: PageProps) {
             </li>
           ))}
         </ul>
+      </section>
+
+      {/* ------------------------------------------------------------------ */}
+      {/* Activity: what has actually been recorded, test and live            */}
+      {/* ------------------------------------------------------------------ */}
+      <section className={`${styles.panel} ${styles.panelSpaced}`}>
+        <div className={styles.sectionTitleRow}>
+          <div className={styles.sectionTitleGroup}>
+            <h2>Activity on this email</h2>
+            <InfoTip topic="testSends" label="Activity on this email" />
+          </div>
+          <p className={styles.sectionHint}>
+            Test sends record under <code>{testCampaignId}</code> and are hidden
+            from the dashboard by default — this is where to check them
+          </p>
+        </div>
+
+        {linkIds.length > 0 && (
+          <div className={styles.tableScroll}>
+            <table className={styles.table}>
+              <thead>
+                <tr>
+                  <th>Link ID</th>
+                  <th className={styles.numeric}>Test clicks</th>
+                  <th className={styles.numeric}>Live clicks</th>
+                  <th>Test status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {linkIds.map((id) => {
+                  const test = testByLink.get(id) ?? 0;
+                  const live = liveByLink.get(id) ?? 0;
+                  return (
+                    <tr key={id}>
+                      <td className={styles.mono}>{id}</td>
+                      <td className={styles.numeric}>{test}</td>
+                      <td className={styles.numeric}>{live}</td>
+                      <td>
+                        {test > 0 ? (
+                          <span className={`${styles.pill} ${styles.pillOk}`}>
+                            Clicked in test
+                          </span>
+                        ) : (
+                          <span className={`${styles.pill} ${styles.pillPending}`}>
+                            Not yet clicked
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+                <tr>
+                  <td className={styles.mono}>(open pixel)</td>
+                  <td className={styles.numeric}>
+                    {testMetrics.opens}
+                    <span className={styles.rowNote} style={{ display: "inline", marginLeft: "0.4rem" }}>
+                      opens
+                    </span>
+                  </td>
+                  <td className={styles.numeric}>
+                    {metrics.opens}
+                    <span className={styles.rowNote} style={{ display: "inline", marginLeft: "0.4rem" }}>
+                      opens
+                    </span>
+                  </td>
+                  <td>
+                    {testMetrics.opens > 0 ? (
+                      <span className={`${styles.pill} ${styles.pillOk}`}>
+                        Pixel fired in test
+                      </span>
+                    ) : (
+                      <span className={`${styles.pill} ${styles.pillPending}`}>
+                        No test open yet
+                      </span>
+                    )}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {unexpectedTestLinks.length > 0 && (
+          <div className={styles.warnBanner} style={{ marginTop: "1rem" }}>
+            <strong>Test clicks on link IDs this email does not define</strong>
+            {unexpectedTestLinks.map((id) => (
+              <code key={id} style={{ marginRight: "0.5rem" }}>
+                {id}
+              </code>
+            ))}
+            — those clicks returned a not-found page. Check the link IDs in the
+            build against the pack below.
+          </div>
+        )}
+
+        <div className={styles.sectionTitleRow} style={{ marginTop: "1.5rem" }}>
+          <div className={styles.sectionTitleGroup}>
+            <h3>Recent events</h3>
+          </div>
+          <p className={styles.sectionHint}>Latest {recent.length} · test and live · UTC</p>
+        </div>
+
+        {recent.length === 0 ? (
+          <p className={styles.emptyState}>
+            <strong>Nothing recorded against this email yet</strong> — no test
+            events and no live events. Once a test copy is opened or a tracked
+            link clicked, it appears here within a few seconds.
+          </p>
+        ) : (
+          <div className={styles.tableScroll}>
+            <table className={styles.table}>
+              <thead>
+                <tr>
+                  <th>Time (UTC)</th>
+                  <th>Send</th>
+                  <th>Type</th>
+                  <th>Link ID</th>
+                  <th>Location</th>
+                  <th>Browser · OS</th>
+                  <th>Likely bot</th>
+                </tr>
+              </thead>
+              <tbody>
+                {recent.map((event) => {
+                  const isTest = event.campaignId === testCampaignId;
+                  return (
+                    <tr key={event.id}>
+                      <td className={styles.mono}>{fmtTime(event.createdAt)}</td>
+                      <td>
+                        <span className={`${styles.pill} ${isTest ? styles.pillTest : styles.pillSent}`}>
+                          {isTest ? "test" : "live"}
+                        </span>
+                      </td>
+                      <td>
+                        <span className={event.eventType === "open" ? styles.badgeOpen : styles.badgeClick}>
+                          {event.eventType}
+                        </span>
+                      </td>
+                      <td className={styles.mono}>{event.linkId ?? "—"}</td>
+                      <td>
+                        {event.ipCountry ?? "—"}
+                        {event.ipCity ? ` · ${event.ipCity}` : ""}
+                      </td>
+                      <td title={event.userAgent ?? undefined}>{describeUserAgent(event.userAgent)}</td>
+                      <td>{event.isBot ? "Yes" : "No"}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+        <p className={styles.sourceLine}>
+          Live figures for this email on the dashboard exclude the test rows
+          above. Tick <em>Include test sends</em> there to see them alongside.
+        </p>
       </section>
 
       {linkIds.length === 0 && (
@@ -346,7 +524,7 @@ export default async function CampaignSetupPage({ params }: PageProps) {
           Point the test build at <code>{testCampaignId}</code>. It uses the
           same destinations, so the test genuinely exercises the live links,
           but the events are recorded separately and stay out of the live
-          figures.
+          figures. Results appear in <em>Activity on this email</em> above.
         </p>
         <pre className={styles.codeBlock}>
           <code>{`${testPixelSnippet}
