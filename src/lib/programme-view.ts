@@ -1,12 +1,14 @@
 import {
   PROGRAMMES,
   UNASSIGNED_PROGRAMME_ID,
+  getLiveWindows,
   getProgrammeById,
   getTestCampaignId,
   getUnassignedCampaignIds,
   isTestCampaignId,
   type CampaignDefinition,
   type CampaignStatus,
+  type LiveWindow,
   type Programme,
 } from "@/config/programmes";
 import { getCampaignLinkIds, getCampaignLinkMap } from "@/config/links";
@@ -36,6 +38,11 @@ export interface CampaignRowView {
   hasTrackedLinks: boolean;
   /** False when the cid has no entry in campaignLinkDestinations at all. */
   hasLinkMap: boolean;
+  /**
+   * Sent or closed, but no liveFrom recorded (and not explicitly marked as
+   * predating the rule). Pre-send clicks would be counting as live.
+   */
+  liveFromMissing: boolean;
   metrics: CampaignMetrics;
   /** Metrics recorded against the `-test` twin, if any. */
   testMetrics: CampaignMetrics | null;
@@ -62,6 +69,12 @@ export interface ResolvedScope {
   selectedCampaignId: string | null;
   /** IDs to hand to the stats layer, honouring the test-data toggle. */
   filterCampaignIds: string[];
+  /**
+   * Pre-send exclusions for the live IDs in scope. Empty when the test toggle
+   * is on, so everything shows; otherwise events before an email's live-from
+   * moment (or on an email not yet sent) are kept out of the figures.
+   */
+  liveWindows: LiveWindow[];
 }
 
 export const ALL_PROGRAMMES_ID = "all";
@@ -154,6 +167,7 @@ export function resolveScope(options: {
     programmeCampaignIds,
     selectedCampaignId,
     filterCampaignIds: withTestTwins(baseIds, includeTests),
+    liveWindows: includeTests ? [] : getLiveWindows(baseIds),
   };
 }
 
@@ -190,6 +204,10 @@ export function buildCampaignRows(options: {
       linkIds,
       hasTrackedLinks: linkIds.length > 0,
       hasLinkMap: linkMap !== null,
+      liveFromMissing:
+        definition !== undefined &&
+        (definition.status === "sent" || definition.status === "closed") &&
+        definition.liveFrom === undefined,
       metrics: metricsById.get(id) ?? emptyMetrics(id),
       testMetrics: testMetricsById.get(getTestCampaignId(id)) ?? null,
     };

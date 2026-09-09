@@ -158,11 +158,46 @@ export const HELP = {
   recentEvents: {
     label: "Recent events",
     short:
-      "The latest 50 individual events in the current view, newest first. Times are UTC.",
+      "The latest 50 individual events in the current view, newest first. Times are UK time (GMT/BST as applicable).",
     detail: [
       "This is the raw feed, useful for confirming that a change has taken effect or that a test has registered.",
-      "During British Summer Time, UTC is one hour behind local time.",
+      "Every time shown in the interface is UK time. The CSV export keeps timestamps in UTC (ISO 8601 with a Z) because that is unambiguous for analysis.",
       "For anything beyond the latest 50, use the CSV export.",
+    ],
+  },
+
+  preSend: {
+    label: "What counts as a test",
+    short:
+      "Two things make an event a test: it was recorded on a -test campaign ID, or it happened on the live campaign ID before the email was actually sent. Neither is ever counted as live.",
+    detail: [
+      "Test sends use the -test version of the URLs and are always test, whenever they happen.",
+      "Pre-send covers everyone checking the live URLs before the send — the build team clicking through the real HTML, for example. An email is not live until its status is Sent and its live-from moment has been recorded; every event on the live campaign ID before that is pre-send.",
+      "Both are hidden from the figures by default and shown, labelled, when Include test sends is ticked. The setup page for each email lists them side by side with live activity.",
+      "Historic sends that predate this rule have no live-from moment recorded, so everything on them counts as live — the same as before.",
+    ],
+  },
+
+  internal: {
+    label: "Likely internal",
+    short:
+      "A live click from a device that had earlier produced test or pre-send events — most likely a colleague looking at the live email, not a recipient.",
+    detail: [
+      "A device is identified by hashed IP address plus mail client, the same combination used for approximate uniques. If it appears on any test or pre-send event in the current view, its later live events are flagged likely internal.",
+      "This catches the common case of the build team or the account team opening and clicking the live email once it has gone out.",
+      "It is a heuristic. A shared office network can make a genuine recipient look internal if a colleague tested from the same network; the flag is applied, never used to delete anything.",
+    ],
+  },
+
+  triage: {
+    label: "Click triage",
+    short:
+      "Every live click is given one reason — likely bot, likely internal, scanner echo, repeat, or genuine — applied in that order. Genuine is what remains.",
+    detail: [
+      "Raw clicks are first split by phase: test, pre-send and live. Only live clicks go on to triage.",
+      "Bot — the user agent matched a known scanner, proxy or automation pattern. Internal — the device had produced test or pre-send events. Echo — a near-simultaneous click on the same link from a different address. Repeat — the same again from the same address. Genuine — none of the above.",
+      "The order matters: a bot is a bot before it is anything else, and an echo is only looked for among clicks that have already passed the first two checks.",
+      "Nothing is stored. Phase and reason are recalculated from the rules and the campaign's live-from moment every time, so a correction re-triages history consistently. The CSV export carries both columns per row.",
     ],
   },
 
@@ -185,6 +220,64 @@ export const HELP = {
       "Approximate unique tries to collapse those repeats but does so imperfectly, so it will rarely equal the number of real people.",
       "Programme-level approximate uniques are not the sum of their emails. Somebody who opened two emails in a programme is one unique at programme level and one in each email, so the parts add up to more than the whole.",
       "A single click also produces no open, and a single open produces no click. The two are recorded independently, so an email can show clicks from someone whose open was never registered.",
+      "The Duplication page breaks clicks down into the three patterns we can detect — scanner echoes, repeat clicks and everything else — with the evidence for each.",
+    ],
+  },
+
+  echoClusters: {
+    label: "Scanner echoes",
+    short:
+      "Two clicks on the same link within seconds, from different addresses — typically one in the recipient's country and one elsewhere. The signature of a link-protection scanner, not two people.",
+    detail: [
+      "Many organisations route email through a security layer such as Microsoft Defender Safe Links, Proofpoint URL Defense or Mimecast. When a recipient clicks, that layer fetches the link from its own infrastructure to check it, then lets the recipient's browser through. Both requests reach our redirect.",
+      "The scanner request usually comes from a data centre — often the US, Ireland or the Netherlands — seconds before or after the recipient's own click from the UK. Because the two arrive from different addresses, the approximate unique measure cannot tell them apart.",
+      "We group clicks on the same link that fall within a short window (10 seconds by default), pick the most person-like event in each group as the primary, and label the others. An echo is a non-primary event from a different address.",
+      "Naming a specific vendor from the data alone is an interpretation, not a finding. What the data does show is the timing, the geography and whether the request carried browser hints — all of which are on the Duplication page.",
+    ],
+  },
+
+  repeatClicks: {
+    label: "Repeat clicks",
+    short:
+      "A second click on the same link, from the same address, within the window. Someone clicking again or refreshing — real, but not a new person.",
+    detail: [
+      "Unlike an echo, a repeat comes from the same hashed address as the primary click. That points to the same device rather than a scanner.",
+      "Repeats are collapsed along with echoes when the collapse toggle is on, since either way the link was followed by one person in that moment.",
+      "Clicks by the same person minutes or hours apart are deliberately not collapsed. They fall outside the window and are counted as separate engagements, which is what they are.",
+    ],
+  },
+
+  collapsedClicks: {
+    label: "Collapsed clicks",
+    short:
+      "Clicks counted once per near-simultaneous cluster rather than once per event. Removes scanner echoes and immediate repeats; leaves everything else alone.",
+    detail: [
+      "When Collapse near-simultaneous echoes is ticked, every click figure on the page — totals, per email, per link — counts clusters instead of events. Approximate unique clicks is recalculated over the primary event of each cluster.",
+      "Nothing is deleted or changed in the data. The toggle only changes how the figures are counted, and the CSV export still contains every event.",
+      "Collapsed figures are the better basis for a client report. Say so in the source line, including the window used.",
+      "The window is a judgement. Too short and slow scanners slip through; too long and two genuine people clicking in the same moment get merged. Ten seconds is a sensible default; the Duplication page shows what each setting would do.",
+    ],
+  },
+
+  echoWindow: {
+    label: "Echo window",
+    short:
+      "How close together two clicks on the same link must be to count as one. Ten seconds catches most scanner echoes; widen it if the Duplication page shows gaps just outside.",
+    detail: [
+      "A cluster grows as long as each click is within the window of the previous one, so a chain of three clicks a few seconds apart is one cluster.",
+      "At busy moments — right after a send — two real people can click the same link within a few seconds of each other. A wider window makes that false merge more likely. Check the Duplication page before widening it for a report.",
+    ],
+  },
+
+  clientKind: {
+    label: "Client hints",
+    short:
+      "What the request itself said about where it came from. A browser navigation is the strongest sign of a person; no hints at all is typical of scanners and older mail clients.",
+    detail: [
+      "Modern browsers attach Sec-Fetch headers to every request. A person clicking a link produces a top-level navigation; a scanner fetching the same link usually sends nothing.",
+      "Browser navigation — a real browser loading the page after a click. Image load — a real browser loading the pixel. Other fetch — a browser, but not a navigation, such as a preview or prefetch. No browser hints — none of the headers were present.",
+      "Absence of hints is a soft signal. Some legitimate mail clients and older browsers omit them too, so it is weighed alongside timing and geography rather than trusted on its own.",
+      "Hints have been captured since September 2026. Earlier rows show Not captured.",
     ],
   },
 
@@ -211,7 +304,15 @@ export const GUIDE_ORDER: HelpId[] = [
   "totalClicks",
   "approxUnique",
   "clicksPerOpen",
+  "preSend",
+  "triage",
+  "internal",
   "duplication",
+  "echoClusters",
+  "repeatClicks",
+  "collapsedClicks",
+  "echoWindow",
+  "clientKind",
   "bots",
   "testSends",
   "linkId",

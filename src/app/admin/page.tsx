@@ -10,6 +10,20 @@ import {
   type DashboardStats,
 } from "@/lib/dashboard";
 import {
+  ECHO_WINDOW_OPTIONS,
+  parseEchoWindow,
+} from "@/lib/duplication";
+import { CLIENT_KIND_LABELS } from "@/lib/request-hints";
+import { BOT_REASON_LABELS } from "@/lib/bot-detect";
+import { formatUkTime, UK_TIME_LABEL } from "@/lib/time";
+import {
+  loadTriage,
+  PHASE_LABELS,
+  phaseOf,
+  REASON_LABELS,
+  type TriageResult,
+} from "@/lib/triage";
+import {
   CAMPAIGN_STATUS_LABELS,
   getAllCampaigns,
   getTestCampaignId,
@@ -40,6 +54,8 @@ type SearchParams = {
   tests?: string;
   q?: string;
   status?: string;
+  collapse?: string;
+  window?: string;
 };
 
 type PageProps = {
@@ -74,7 +90,7 @@ const STATUS_ORDER: CampaignStatus[] = [
   "closed",
 ];
 
-function dashboardHref(params: SearchParams): string {
+function toQuery(params: SearchParams): URLSearchParams {
   const search = new URLSearchParams();
   if (params.programme && params.programme !== ALL_PROGRAMMES_ID) {
     search.set("programme", params.programme);
@@ -84,9 +100,21 @@ function dashboardHref(params: SearchParams): string {
   if (params.tests === "include") search.set("tests", "include");
   if (params.q) search.set("q", params.q);
   if (params.status) search.set("status", params.status);
+  if (params.collapse === "1") search.set("collapse", "1");
+  if (params.window) search.set("window", params.window);
+  return search;
+}
 
-  const query = search.toString();
+function dashboardHref(params: SearchParams): string {
+  const query = toQuery(params).toString();
   return query ? `/admin?${query}` : "/admin";
+}
+
+function duplicationHref(params: SearchParams): string {
+  const search = toQuery({ ...params, q: undefined, status: undefined });
+  search.delete("collapse");
+  const query = search.toString();
+  return query ? `/admin/duplication?${query}` : "/admin/duplication";
 }
 
 export default async function AdminDashboardPage({ searchParams }: PageProps) {
@@ -98,6 +126,8 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
   const params = await searchParams;
   const excludeBots = params.bots === "exclude";
   const includeTests = params.tests === "include";
+  const collapseEchoes = params.collapse === "1";
+  const echoWindowSeconds = parseEchoWindow(params.window);
   const query = (params.q ?? "").trim();
   const statusFilter = STATUS_ORDER.includes(params.status as CampaignStatus)
     ? (params.status as CampaignStatus)
@@ -107,6 +137,7 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
   let stats: DashboardStats | null = null;
   let programmeMetrics: CampaignMetrics[] = [];
   let testMetrics: CampaignMetrics[] = [];
+  let triage: TriageResult | null = null;
   let dbError: string | null = null;
   let scope: ReturnType<typeof resolveScope> | null = null;
 
@@ -120,17 +151,37 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
       includeTests,
     });
 
-    [stats, programmeMetrics, testMetrics] = await Promise.all([
-      getDashboardStats({ campaignIds: scope.filterCampaignIds, excludeBots }),
-      getCampaignMetrics({
-        campaignIds: scope.programmeCampaignIds,
-        excludeBots,
-      }),
-      getCampaignMetrics({
-        campaignIds: scope.programmeCampaignIds.map(getTestCampaignId),
-        excludeBots,
-      }),
-    ]);
+    const options = { collapseEchoes, echoWindowSeconds };
+
+    [stats, programmeMetrics, testMetrics, triage] =
+      await Promise.all([
+        getDashboardStats(
+          {
+            campaignIds: scope.filterCampaignIds,
+            excludeBots,
+            liveWindows: scope.liveWindows,
+          },
+          options
+        ),
+        getCampaignMetrics(
+          {
+            campaignIds: scope.programmeCampaignIds,
+            excludeBots,
+            liveWindows: scope.liveWindows,
+          },
+          options
+        ),
+        getCampaignMetrics({
+          campaignIds: scope.programmeCampaignIds.map(getTestCampaignId),
+          excludeBots,
+        }),
+        loadTriage(
+          scope.selectedCampaignId
+            ? [scope.selectedCampaignId]
+            : scope.programmeCampaignIds,
+          echoWindowSeconds
+        ),
+      ]);
   } catch (error) {
     dbError = error instanceof Error ? error.message : String(error);
     console.error("[admin] dashboard query failed:", error);
@@ -154,6 +205,9 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
           <span className={styles.userChipName}>{user.name}</span>
           <span className={styles.userChipRole}>{ROLE_LABELS[user.role]}</span>
         </span>
+        <Link href={duplicationHref(params)} className={styles.buttonSecondary}>
+          Duplication
+        </Link>
         <Link href="/admin/guide" className={styles.buttonSecondary}>
           How to read this
         </Link>
@@ -179,7 +233,7 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
           <p>
             Check that the Postgres database is active and connected in Vercel
             (Storage), then redeploy. <code>/health</code> should return{" "}
-            <code>{`{"database":"connected"}`}</code>.
+            <code>{`{"database":"connected","schema":"current"}`}</code>.
           </p>
           {dbError && <pre className={styles.errorDetail}>{dbError}</pre>}
         </div>
@@ -217,12 +271,6 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
   const exportHref = `/admin/export.csv?${exportSearch.toString()}`;
   const mayExport = can(user.role, "exportCsv");
 
-  const programmeIndex = scope.programme
-    ? PROGRAMMES.findIndex((p) => p.id === scope!.programme!.id)
-    : -1;
-  const scopeAccent =
-    programmeIndex >= 0 ? accentFor(programmeIndex) : "var(--border)";
-
   const scopeLabel = scope.programme
     ? scope.programme.label
     : scope.isUnassigned
@@ -239,6 +287,11 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
   const hiddenTestEvents = includeTests
     ? 0
     : testMetrics.reduce((sum, m) => sum + m.opens + m.clicks, 0);
+  // Pre-send comes from the triage pass — the same numbers the waterfall shows.
+  const hiddenPreSendEvents =
+    includeTests || !triage ? 0 : triage.clicks.preSend + triage.opens.preSend;
+  const detectedEchoes = stats.echoEventIds.size;
+  const detectedRepeats = stats.repeatEventIds.size;
 
   // A plain-words summary of what is currently on screen.
   const summaryParts = [
@@ -246,10 +299,19 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
     selectedRow ? selectedRow.label : `all ${allRows.length} emails`,
     excludeBots ? "likely bots excluded" : "bots included",
     includeTests ? "test sends included" : "test sends hidden",
+    collapseEchoes
+      ? `echoes within ${echoWindowSeconds}s collapsed`
+      : "every click counted",
   ];
   if (query) summaryParts.push(`list filtered by "${query}"`);
   if (statusFilter)
     summaryParts.push(`status ${CAMPAIGN_STATUS_LABELS[statusFilter]}`);
+
+  const clicksHint = collapseEchoes && stats.collapse
+    ? `${stats.collapse.echoEvents} echo${stats.collapse.echoEvents === 1 ? "" : "es"} and ${stats.collapse.repeatEvents} repeat${stats.collapse.repeatEvents === 1 ? "" : "s"} collapsed.`
+    : detectedEchoes + detectedRepeats > 0
+      ? `${detectedEchoes} likely echo${detectedEchoes === 1 ? "" : "es"}, ${detectedRepeats} repeat${detectedRepeats === 1 ? "" : "s"} detected — not collapsed.`
+      : "Tracked links followed. Clicks, not clickers.";
 
   return (
     <div className={styles.page}>
@@ -359,10 +421,13 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
         the same time. Approximate unique counts group by hashed IP address and
         mail client; they are a rough de-duplication and{" "}
         <strong>not a count of people</strong>. Clicks are the more dependable
-        signal.
+        signal — but security scanners can echo a click from a second address
+        seconds later, which is what the collapse toggle is for.
         <p className={styles.noticeLinks}>
-          <Link href="/admin/guide">
-            Read the full guide to these figures →
+          <Link href="/admin/guide">Read the full guide →</Link>
+          {"  ·  "}
+          <Link href={duplicationHref(params)}>
+            See the duplication analysis →
           </Link>
         </p>
       </div>
@@ -448,6 +513,30 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
               <label htmlFor="tests">Include test sends</label>
               <InfoTip topic="testSends" />
             </span>
+            <span className={styles.toggle}>
+              <input
+                type="checkbox"
+                id="collapse"
+                name="collapse"
+                value="1"
+                defaultChecked={collapseEchoes}
+              />
+              <label htmlFor="collapse">Collapse near-simultaneous echoes</label>
+              <InfoTip topic="collapsedClicks" />
+              <select
+                name="window"
+                aria-label="Echo window in seconds"
+                defaultValue={String(echoWindowSeconds)}
+                className={styles.inlineSelect}
+              >
+                {ECHO_WINDOW_OPTIONS.map((seconds) => (
+                  <option key={seconds} value={seconds}>
+                    within {seconds}s
+                  </option>
+                ))}
+              </select>
+              <InfoTip topic="echoWindow" />
+            </span>
           </div>
 
           <div className={styles.filterActions}>
@@ -513,15 +602,13 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
           style={{ ["--item-accent" as string]: accentFor(2) }}
         >
           <span className={styles.statLabel}>
-            Total clicks
-            <InfoTip topic="totalClicks" />
+            {collapseEchoes ? "Collapsed clicks" : "Total clicks"}
+            <InfoTip topic={collapseEchoes ? "collapsedClicks" : "totalClicks"} />
           </span>
           <span className={styles.statValue}>
             {stats.totalClicks.toLocaleString("en-GB")}
           </span>
-          <span className={styles.statHint}>
-            Tracked links followed. Clicks, not clickers.
-          </span>
+          <span className={styles.statHint}>{clicksHint}</span>
         </div>
 
         <div
@@ -536,7 +623,9 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
             {stats.approximateUniqueClicks.toLocaleString("en-GB")}
           </span>
           <span className={styles.statHint}>
-            Distinct hashed IP + mail client. Not recipients.
+            {collapseEchoes
+              ? "Over primary clicks only. Not recipients."
+              : "Distinct hashed IP + mail client. Not recipients."}
           </span>
         </div>
 
@@ -557,7 +646,122 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
         </div>
       </section>
 
-      <p className={styles.sourceLineBlock}>{SOURCE_LINE}</p>
+      <p className={styles.sourceLineBlock}>
+        {SOURCE_LINE}
+        {collapseEchoes &&
+          ` Click figures collapse near-simultaneous events on the same link within ${echoWindowSeconds} seconds to one.`}
+      </p>
+
+      {triage && (
+        <section className={`${styles.panel} ${styles.panelSpaced}`}>
+          <div className={styles.sectionTitleRow}>
+            <div className={styles.sectionTitleGroup}>
+              <h2>Click triage — from raw to genuine</h2>
+              <InfoTip topic="triage" />
+            </div>
+            <p className={styles.sectionHint}>
+              {scope.selectedCampaignId ? "This email" : "Emails in this view"} ·
+              every click recorded, classified · window {echoWindowSeconds}s
+            </p>
+          </div>
+          <div className={styles.tableScroll}>
+            <table className={styles.table}>
+              <thead>
+                <tr>
+                  <th>Stage</th>
+                  <th className={styles.numeric}>Clicks</th>
+                  <th className={styles.numeric}>Opens</th>
+                  <th>What it means</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td className={styles.rowHead}>Raw events</td>
+                  <td className={styles.numeric}>{triage.clicks.raw}</td>
+                  <td className={styles.numeric}>{triage.opens.raw}</td>
+                  <td className={styles.rowNote} style={{ display: "table-cell" }}>
+                    Everything recorded on these campaign IDs and their -test twins.
+                  </td>
+                </tr>
+                <tr>
+                  <td>− Test</td>
+                  <td className={styles.numeric}>{triage.clicks.test}</td>
+                  <td className={styles.numeric}>{triage.opens.test}</td>
+                  <td className={styles.rowNote} style={{ display: "table-cell" }}>
+                    On a -test campaign ID.
+                  </td>
+                </tr>
+                <tr>
+                  <td>− Pre-send</td>
+                  <td className={styles.numeric}>{triage.clicks.preSend}</td>
+                  <td className={styles.numeric}>{triage.opens.preSend}</td>
+                  <td className={styles.rowNote} style={{ display: "table-cell" }}>
+                    On the live ID before the email was sent.
+                  </td>
+                </tr>
+                <tr>
+                  <td className={styles.rowHead}>= Live</td>
+                  <td className={styles.numeric}>{triage.clicks.live}</td>
+                  <td className={styles.numeric}>{triage.opens.live}</td>
+                  <td className={styles.rowNote} style={{ display: "table-cell" }}>
+                    What the headline figures count.
+                  </td>
+                </tr>
+                <tr>
+                  <td>− Likely bot</td>
+                  <td className={styles.numeric}>{triage.clicks.bot}</td>
+                  <td className={styles.numeric}>{triage.opens.bot}</td>
+                  <td className={styles.rowNote} style={{ display: "table-cell" }}>
+                    Scanner, proxy or automation user agent.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    − Likely internal
+                    <InfoTip topic="internal" />
+                  </td>
+                  <td className={styles.numeric}>{triage.clicks.internal}</td>
+                  <td className={styles.numeric}>{triage.opens.internal}</td>
+                  <td className={styles.rowNote} style={{ display: "table-cell" }}>
+                    A device that had produced test or pre-send events ({triage.internalDevices} device{triage.internalDevices === 1 ? "" : "s"}).
+                  </td>
+                </tr>
+                <tr>
+                  <td>− Scanner echo</td>
+                  <td className={styles.numeric}>{triage.clicks.echo}</td>
+                  <td className={styles.numeric}>—</td>
+                  <td className={styles.rowNote} style={{ display: "table-cell" }}>
+                    Same link, seconds apart, different address.
+                  </td>
+                </tr>
+                <tr>
+                  <td>− Repeat</td>
+                  <td className={styles.numeric}>{triage.clicks.repeat}</td>
+                  <td className={styles.numeric}>—</td>
+                  <td className={styles.rowNote} style={{ display: "table-cell" }}>
+                    Same link, seconds apart, same address.
+                  </td>
+                </tr>
+                <tr className={styles.rowSelected}>
+                  <td className={styles.rowHead}>= Genuine</td>
+                  <td className={`${styles.numeric} ${styles.rowHead}`}>{triage.clicks.genuine}</td>
+                  <td className={`${styles.numeric} ${styles.rowHead}`}>{triage.opens.genuine}</td>
+                  <td className={styles.rowNote} style={{ display: "table-cell" }}>
+                    Approx. {triage.genuineApproxUniqueClicks} distinct device{triage.genuineApproxUniqueClicks === 1 ? "" : "s"} clicking,{" "}
+                    {triage.genuineApproxUniqueOpens} opening. Opens remain estimates.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p className={styles.sourceLine}>
+            Phase comes from each email&rsquo;s status and live-from moment; the
+            reason is applied in the order shown, first match wins. Nothing is
+            stored — a corrected live-from re-triages history. The CSV export
+            carries phase and reason per row.
+          </p>
+        </section>
+      )}
 
       <section className={`${styles.panel} ${styles.panelSpaced}`}>
         <div className={styles.sectionTitleRow}>
@@ -601,8 +805,10 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
                     <InfoTip topic="totalOpens" />
                   </th>
                   <th className={styles.numeric}>
-                    Clicks
-                    <InfoTip topic="totalClicks" />
+                    {collapseEchoes ? "Clicks (collapsed)" : "Clicks"}
+                    <InfoTip
+                      topic={collapseEchoes ? "collapsedClicks" : "totalClicks"}
+                    />
                   </th>
                   <th className={styles.numeric}>
                     Clicks/open
@@ -617,6 +823,7 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
                     key={row.id}
                     row={row}
                     selected={scope!.selectedCampaignId === row.id}
+                    includeTests={includeTests}
                   />
                 ))}
               </tbody>
@@ -624,14 +831,17 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
           </div>
         )}
 
-        {hiddenTestEvents > 0 && (
+        {hiddenTestEvents + hiddenPreSendEvents > 0 && (
           <p className={styles.emptyState} style={{ marginTop: "1rem" }}>
             <strong>
-              {hiddenTestEvents} test event{hiddenTestEvents === 1 ? "" : "s"}{" "}
+              {hiddenTestEvents} test event{hiddenTestEvents === 1 ? "" : "s"}
+              {hiddenPreSendEvents > 0 &&
+                ` and ${hiddenPreSendEvents} pre-send event${hiddenPreSendEvents === 1 ? "" : "s"}`}{" "}
               recorded for this view — hidden from the figures.
             </strong>{" "}
-            Test sends use the <code>-test</code> campaign ID and are kept out
-            of live reporting.{" "}
+            Test sends use the <code>-test</code> campaign ID; pre-send events
+            are on the live ID before the email went out. Neither counts as
+            live.{" "}
             <Link href={dashboardHref({ ...params, tests: "include" })}>
               Show test sends →
             </Link>{" "}
@@ -666,7 +876,9 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
               <thead>
                 <tr>
                   <th>Link ID</th>
-                  <th className={styles.numeric}>Clicks</th>
+                  <th className={styles.numeric}>
+                    {collapseEchoes ? "Clicks (collapsed)" : "Clicks"}
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -734,7 +946,7 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
             <InfoTip topic="recentEvents" />
           </div>
           <p className={styles.sectionHint}>
-            Latest 50 in this view · times in UTC
+            Latest 50 in this view · {UK_TIME_LABEL}
           </p>
         </div>
         {stats.recentEvents.length === 0 ? (
@@ -744,7 +956,7 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
             <table className={styles.table}>
               <thead>
                 <tr>
-                  <th>Time (UTC)</th>
+                  <th>Time ({UK_TIME_LABEL})</th>
                   <th>Type</th>
                   <th>Campaign ID</th>
                   <th>Link ID</th>
@@ -753,20 +965,19 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
                     <InfoTip topic="location" />
                   </th>
                   <th>
-                    Likely bot
-                    <InfoTip topic="bots" />
+                    Client
+                    <InfoTip topic="clientKind" />
+                  </th>
+                  <th>
+                    Flags
+                    <InfoTip topic="echoClusters" label="Flags" />
                   </th>
                 </tr>
               </thead>
               <tbody>
                 {stats.recentEvents.map((event) => (
                   <tr key={event.id}>
-                    <td className={styles.mono}>
-                      {event.createdAt
-                        .toISOString()
-                        .replace("T", " ")
-                        .slice(0, 19)}
-                    </td>
+                    <td className={styles.mono}>{formatUkTime(event.createdAt)}</td>
                     <td>
                       <span
                         className={
@@ -780,8 +991,72 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
                     </td>
                     <td className={styles.mono}>{event.campaignId ?? "—"}</td>
                     <td className={styles.mono}>{event.linkId ?? "—"}</td>
-                    <td>{event.ipCountry ?? "—"}</td>
-                    <td>{event.isBot ? "Yes" : "No"}</td>
+                    <td>
+                      {event.ipCountry ?? "—"}
+                      {event.ipCity ? ` · ${event.ipCity}` : ""}
+                    </td>
+                    <td>
+                      {
+                        CLIENT_KIND_LABELS[
+                          (event.clientKind as keyof typeof CLIENT_KIND_LABELS) ??
+                            "unknown"
+                        ] ?? CLIENT_KIND_LABELS.unknown
+                      }
+                    </td>
+                    <td>
+                      <span className={styles.flagStack}>
+                        {phaseOf(event.campaignId, event.createdAt) !== "live" && (
+                          <span
+                            className={`${styles.pill} ${
+                              phaseOf(event.campaignId, event.createdAt) === "test"
+                                ? styles.pillTest
+                                : styles.pillInReview
+                            }`}
+                          >
+                            {PHASE_LABELS[phaseOf(event.campaignId, event.createdAt)]}
+                          </span>
+                        )}
+                        {triage?.byId.get(event.id)?.reason === "internal" && (
+                          <span
+                            className={`${styles.pill} ${styles.pillInReview}`}
+                            title={REASON_LABELS.internal}
+                          >
+                            internal
+                          </span>
+                        )}
+                        {event.isBot && (
+                          <span
+                            className={`${styles.pill} ${styles.pillPending}`}
+                            title={
+                              event.botReason
+                                ? BOT_REASON_LABELS[event.botReason] ??
+                                  event.botReason
+                                : "Matched a bot pattern"
+                            }
+                          >
+                            {event.botReason ?? "bot"}
+                          </span>
+                        )}
+                        {stats!.echoEventIds.has(event.id) && (
+                          <span className={`${styles.pill} ${styles.roleEcho}`}>
+                            echo
+                          </span>
+                        )}
+                        {stats!.repeatEventIds.has(event.id) && (
+                          <span
+                            className={`${styles.pill} ${styles.roleRepeat}`}
+                          >
+                            repeat
+                          </span>
+                        )}
+                        {!event.isBot &&
+                          !stats!.echoEventIds.has(event.id) &&
+                          !stats!.repeatEventIds.has(event.id) &&
+                          phaseOf(event.campaignId, event.createdAt) === "live" &&
+                          triage?.byId.get(event.id)?.reason !== "internal" &&
+                          "—"}
+                      </span>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -801,13 +1076,23 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
 function WaveRow({
   row,
   selected,
+  includeTests,
 }: {
   row: CampaignRowView;
   selected: boolean;
+  includeTests: boolean;
 }) {
   const testEvents = row.testMetrics
     ? row.testMetrics.opens + row.testMetrics.clicks
     : 0;
+  // With the toggle on, the row's own figures are live-only, so say what the
+  // test twin adds — the headline figures include it.
+  const testNote =
+    includeTests && row.testMetrics
+      ? `// plus ${row.testMetrics.opens} test open${row.testMetrics.opens === 1 ? "" : "s"}, ${row.testMetrics.clicks} test click${row.testMetrics.clicks === 1 ? "" : "s"} in the headline figures`
+      : testEvents > 0
+        ? `// ${testEvents} test event${testEvents === 1 ? "" : "s"} recorded`
+        : null;
 
   return (
     <tr className={selected ? styles.rowSelected : undefined}>
@@ -817,9 +1102,10 @@ function WaveRow({
       </td>
       <td>
         <span className={styles.mono}>{row.id}</span>
-        {testEvents > 0 && (
-          <span className={styles.rowNoteAccent}>
-            {`// ${testEvents} test event${testEvents === 1 ? "" : "s"} recorded`}
+        {testNote && <span className={styles.rowNoteAccent}>{testNote}</span>}
+        {row.liveFromMissing && (
+          <span className={styles.rowNoteAccent} title="Set liveFrom in src/config/programmes.ts">
+            {"// sent without a live-from — pre-send clicks are counting as live"}
           </span>
         )}
       </td>

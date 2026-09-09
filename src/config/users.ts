@@ -10,7 +10,11 @@
 export type Role = "admin" | "build";
 
 export interface AppUser {
-  /** Lower-case email address, used as the sign-in name. */
+  /**
+   * Email address, used as the sign-in name. Capitalisation does not matter
+   * either here or when signing in — both sides are lower-cased to compare.
+   * Keep these lower-case anyway, since this is the form the dashboard shows.
+   */
   email: string;
   name: string;
   role: Role;
@@ -48,7 +52,11 @@ export const USERS: AppUser[] = [
 
 export function findUserByEmail(email: string): AppUser | null {
   const normalised = email.trim().toLowerCase();
-  return USERS.find((user) => user.email === normalised) ?? null;
+  // Both sides are lower-cased, so a capitalised entry above cannot silently
+  // lock someone out.
+  return (
+    USERS.find((user) => user.email.trim().toLowerCase() === normalised) ?? null
+  );
 }
 
 /** Capabilities are derived from the role, never stored per user. */

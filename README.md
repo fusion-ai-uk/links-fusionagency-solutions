@@ -53,10 +53,11 @@ Approximate unique metrics in the dashboard use distinct combinations of `campai
 |----------|---------|
 | `GET /o?cid={campaign_id}` | Open tracking pixel (returns 1×1 GIF) |
 | `GET /c/[linkId]?cid={campaign_id}` | Click tracking redirect |
-| `GET /health` | Health check (includes DB connectivity) |
+| `GET /health` | Health check — DB connectivity and whether the schema is current |
 | `GET /admin` | Admin dashboard, sectioned by programme |
 | `GET /admin/setup/[campaignId]` | Per-email tracking setup + handover pack |
 | `GET /admin/guide` | How to read the figures — caveats and definitions |
+| `GET /admin/duplication` | Duplication analysis — scanner echoes, repeat clicks, evidence |
 | `GET /admin/export.csv` | CSV export (scoped to the current dashboard view) |
 | `GET /examples` | Generic email HTML snippet reference (public) |
 
@@ -186,7 +187,7 @@ Use this base URL in all email HTML snippets and handover packs. Routes are unch
 ### Verification after deploy
 
 Confirm:
-  - [https://links-record.vercel.app/health](https://links-record.vercel.app/health) returns `{ "status": "ok", ... }`
+  - [https://links-record.vercel.app/health](https://links-record.vercel.app/health) returns `{ "status": "ok", "schema": "current", ... }` — `schema: outdated` means a deploy went out without its migration
   - [https://links-record.vercel.app/admin](https://links-record.vercel.app/admin) shows the login page
   - [https://links-record.vercel.app/examples](https://links-record.vercel.app/examples) shows HTML snippets
 
@@ -350,26 +351,57 @@ needed. Click tracking needs each CTA allowlisting first.
 
 ---
 
-## Handover process for a new email
+## How an email is set up
 
-Run this once per email, ahead of its transmission date.
+Every email is different — some have no calls to action, some several — so
+tracking is configured from the **final approved HTML**, one email at a time.
+Setup is done by Michael through Claude Code, not in the dashboard, until an
+automated route exists. The steps, as they actually run:
 
-1. **Approved HTML arrives.** Identify every CTA that needs click tracking and
-   its final destination URL.
-2. **Choose a link ID per CTA** — short, lower-case, hyphenated, and descriptive
-   of the CTA (e.g. `watch-the-symposium`). Keep them stable once sent.
-3. **Add the destinations** to `src/config/links.ts` under that campaign's
-   `cid`, then commit and redeploy.
-4. **Update the campaign status** in `src/config/programmes.ts`
-   (`planned` → `in-review` → `ready`), and set `sendDate` when known.
-5. **Open `/admin/setup/<campaign-id>`.** It generates the pixel tag, every
-   tracked CTA URL, and a copy-ready handover block. Send that to the email
-   build.
-6. **Test before send** using the `-test` campaign ID (see below), then confirm
-   the events appear on the setup page's readiness checklist.
-7. **Flip the status to `sent`** once the email goes out.
+1. **Final approved HTML reaches Michael.**
+2. **Tracking is generated from that HTML** — the open pixel and a tracked URL
+   per call to action, added to `src/config/links.ts`; status → `ready`;
+   deploy. The one-page handover pack (`scratchpad/docgen/make-pack.cjs`)
+   goes to Steve.
+3. **Steve tests.** Either the `-test` URLs or the live URLs before the send —
+   both are treated as testing. The setup page shows each link as clicked or
+   not.
+4. **Send.** Michael sets status → `sent` and records `liveFrom` (ISO 8601
+   with offset). From that moment events on the live ID are live data.
 
-The setup page's readiness checklist shows which of these steps are outstanding.
+The setup page at `/admin/setup/<cid>` reflects these four steps and is where
+test activity is checked.
+
+---
+
+## What counts as a test, and what counts as real
+
+Every event gets a **phase** from configuration alone:
+
+| Phase | Rule |
+|-------|------|
+| `test` | Recorded on a `-test` campaign ID |
+| `pre-send` | Recorded on the live campaign ID before the email was sent: status not yet `sent`, or before its `liveFrom` |
+| `live` | Recorded on the live campaign ID at or after `liveFrom` |
+
+Test and pre-send are hidden from the dashboard figures by default (shown,
+labelled, with *Include test sends*). Historic sends with no `liveFrom` count
+everything as live, as before.
+
+Every **live click** then gets one **triage reason**, first match wins:
+
+| Reason | Rule |
+|--------|------|
+| `bot` | User agent matched a scanner / proxy / automation pattern |
+| `internal` | Same device (hashed IP + user agent) had produced test or pre-send events in the scope — a tester looking at the live email |
+| `echo` | Near-simultaneous click on the same link from a different address |
+| `repeat` | Near-simultaneous click on the same link from the same address |
+| `genuine` | None of the above |
+
+Phase and reason are computed, never stored (`src/lib/triage.ts`), so a
+corrected `liveFrom` re-triages history consistently. The dashboard shows the
+waterfall from raw to genuine; the CSV export carries `phase` and `triage`
+per row and always includes the `-test` twin of each requested campaign.
 
 ---
 
@@ -475,6 +507,86 @@ download always matches what is on screen.
 
 ---
 
+## Duplication: scanner echoes and repeat clicks
+
+The most common oddity in click data is **two clicks on the same link seconds
+apart, one from the UK and one from somewhere else**. That is almost always one
+person. Many organisations route mail through a link-protection layer —
+Microsoft Defender Safe Links, Proofpoint URL Defense, Mimecast and similar —
+which fetches a URL from its own infrastructure to check it as the recipient
+clicks, then lets the browser through. Both requests reach the redirect, from
+different addresses, so the approximate-unique measure cannot merge them.
+
+### What the app does about it
+
+**Captures request hints.** Since September 2026 every event records the
+`Sec-Fetch-*` headers, `Accept-Language` and `Accept`, and derives a
+`client_kind`:
+
+| `client_kind` | Meaning |
+|---------------|---------|
+| `navigation` | Top-level browser navigation — the strongest sign of a person |
+| `image` | A browser loading the pixel |
+| `other` | A browser, but not a navigation (preview, prefetch, programmatic fetch) |
+| `none` | No Sec-Fetch headers at all — typical of scanners and older mail clients |
+| `NULL` | Recorded before hints were captured |
+
+Absence of hints is a soft signal, weighed alongside timing and geography.
+
+**Clusters near-simultaneous clicks.** Clicks on the same campaign + link within
+a window (default 10 seconds, chain-linked) form a cluster. The most person-like
+event is the **primary**; the rest are labelled:
+
+- **echo** — different address to the primary. The scanner signature.
+- **repeat** — same address. Someone clicking again.
+
+Primary selection, in order: not flagged as a bot → browser navigation → the
+country most of that campaign's browser clicks came from (derived from the data,
+not hard-coded) → the later event, since scanners tend to fetch first.
+
+**Offers a collapse filter.** *Collapse near-simultaneous echoes* on the
+dashboard counts one click per cluster in every click figure, recalculates
+approximate unique clicks over primaries, and appends the window to the source
+line. Nothing is deleted; the CSV export always contains every event.
+
+**Shows the evidence.** `/admin/duplication` lists every cluster with more than
+one click — role, offset, location, client hints, browser, bot reason — plus
+where echoes come from, what each window setting would do, and an
+interpretation that is labelled as such.
+
+### Bot reasons
+
+`is_bot` now comes with a `bot_reason` naming the pattern that matched
+(`google-image-proxy`, `http-library`, `skype-teams-preview`, …), so a
+flagged row can be explained rather than just excluded. See
+`src/lib/bot-detect.ts`.
+
+### Choosing a window
+
+Ten seconds catches the typical 1–5 second echo with room to spare. Widening it
+risks merging two real people who click in the same moment right after a send.
+The duplication page shows what 5, 10, 30 and 60 seconds would each do to the
+same clicks — if the numbers barely move, the echoes are tight and the default
+is safe.
+
+### Reporting
+
+Use collapsed clicks, exclude likely bots, and say so in the source line. If a
+client has already seen the uncollapsed figure, show both and explain the
+difference rather than letting them discover it.
+
+---
+
+## Times
+
+Every time shown in the interface is **UK time** (Europe/London — GMT or BST as
+applicable), formatted `09 Sep 2026 14:32:07`. Timestamps are stored in UTC and
+the CSV export keeps them as ISO 8601 with a `Z`, which is unambiguous for
+analysis. `liveFrom` in `src/config/programmes.ts` should be written with its
+offset, e.g. `2026-09-10T09:00:00+01:00`.
+
+---
+
 ## Open tracking limitations
 
 Email open counts are **estimates only**:
@@ -514,6 +626,10 @@ Use opens as a directional signal; rely on click tracking for stronger engagemen
 | `ip_country`, `ip_region`, `ip_city` | Coarse geo from Vercel headers |
 | `user_agent` | Raw user agent string |
 | `is_bot` | Bot/scanner heuristic flag |
+| `bot_reason` | Which pattern matched, when `is_bot` is true |
+| `client_kind` | `navigation` / `image` / `other` / `none` — derived from request hints |
+| `accept_language`, `accept_header` | Request headers, truncated to 200 chars |
+| `sec_fetch_mode`, `sec_fetch_dest`, `sec_fetch_user`, `sec_fetch_site` | Browser fetch metadata; NULL when absent |
 | `created_at` | Event timestamp |
 | `recipient_token` | Nullable legacy field (not used by default) |
 | `message_id` | Nullable legacy field (not used by default) |
@@ -549,7 +665,13 @@ src/
   lib/
     tracking.ts             # Event logging
     auth.ts                 # Admin session
-    dashboard.ts            # Stats queries
+    dashboard.ts            # Stats queries, collapse mode, CSV
+    event-filters.ts        # Shared WHERE builders
+    duplication.ts          # Click clustering, echo/repeat labelling
+    triage.ts               # Phase (test/pre-send/live) and reason per event
+    time.ts                 # UK-time formatting
+    request-hints.ts        # Sec-Fetch capture and client_kind
+    bot-detect.ts           # Bot patterns with reasons
     programme-view.ts       # Programme scoping + wave table view model
     tracking-urls.ts        # Pixel / CTA URL and handover-pack builders
     ip-hash.ts              # IP hashing

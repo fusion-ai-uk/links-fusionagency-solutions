@@ -6,16 +6,22 @@ import {
   unauthorizedResponse,
 } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { buildEventWhere, CSV_HEADERS, eventToCsvRow } from "@/lib/dashboard";
+import { buildEventWhere, CSV_HEADERS, eventToCsvRow, escapeCsvField } from "@/lib/dashboard";
+import { parseEchoWindow } from "@/lib/duplication";
+import { triageEvents } from "@/lib/triage";
+import { baseCampaignId, getTestCampaignId } from "@/config/programmes";
 
 export const runtime = "nodejs";
 
 /**
  * Export email events as CSV (admin only).
- * GET /admin/export.csv?campaign=<cid>&campaign=<cid>&bots=exclude
+ * GET /admin/export.csv?campaign=<cid>&campaign=<cid>&bots=exclude&window=10
  *
  * `campaign` may be repeated so the export matches the dashboard's programme
- * scope. Omit it to export everything.
+ * scope. Omit it to export everything. Every row carries two computed
+ * columns — `phase` (test / pre-send / live) and `triage` (bot / internal /
+ * echo / repeat / genuine, live rows only) — so the file is analysis-ready.
+ * The export always contains every event; nothing is filtered by phase.
  */
 export async function GET(request: NextRequest) {
   if (!getUserFromRequest(request)) {
@@ -35,18 +41,37 @@ export async function GET(request: NextRequest) {
     .getAll("campaign")
     .map((value) => value.trim())
     .filter((value) => value.length > 0 && value !== "all");
-
-  const campaignIds = requested.length > 0 ? requested : null;
   const excludeBots = search.get("bots") === "exclude";
+  const windowSeconds = parseEchoWindow(search.get("window") ?? undefined);
+
+  // Always include each campaign's test twin: triage needs it to learn which
+  // devices are testers, and the phase column keeps it distinguishable.
+  const campaignIds =
+    requested.length > 0
+      ? Array.from(
+          new Set(
+            requested.flatMap((id) => [baseCampaignId(id), getTestCampaignId(id)])
+          )
+        )
+      : null;
 
   const events = await prisma.emailEvent.findMany({
     where: buildEventWhere({ campaignIds, excludeBots }),
     orderBy: { createdAt: "desc" },
   });
 
+  const triage = triageEvents(events, windowSeconds);
+
   const lines = [
-    CSV_HEADERS.join(","),
-    ...events.map((event) => eventToCsvRow(event)),
+    [...CSV_HEADERS, "phase", "triage"].join(","),
+    ...events.map((event) => {
+      const t = triage.byId.get(event.id);
+      return [
+        eventToCsvRow(event),
+        escapeCsvField(t?.phase ?? ""),
+        escapeCsvField(t?.reason ?? ""),
+      ].join(",");
+    }),
   ];
 
   const scope =

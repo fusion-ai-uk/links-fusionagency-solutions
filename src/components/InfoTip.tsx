@@ -51,6 +51,8 @@ export default function InfoTip({ topic, label }: InfoTipProps) {
 
   const close = useCallback(() => setCoords(null), []);
 
+  const tooltipRef = useRef<HTMLSpanElement>(null);
+
   useEffect(() => {
     if (!coords) return;
 
@@ -59,11 +61,28 @@ export default function InfoTip({ topic, label }: InfoTipProps) {
     }
     window.addEventListener("keydown", onKeyDown);
     window.addEventListener("scroll", close, true);
+    window.addEventListener("resize", close);
     return () => {
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("scroll", close, true);
+      window.removeEventListener("resize", close);
     };
   }, [coords, close]);
+
+  // After the panel has rendered, measure it and pull it back inside the
+  // viewport if wrapping or a late layout change pushed it over an edge.
+  useEffect(() => {
+    if (!coords || !tooltipRef.current) return;
+    const rect = tooltipRef.current.getBoundingClientRect();
+    let dx = 0;
+    if (rect.right > window.innerWidth - GAP) dx = window.innerWidth - GAP - rect.right;
+    if (rect.left + dx < GAP) dx = GAP - rect.left;
+    if (dx !== 0) {
+      setCoords((current) =>
+        current ? { ...current, left: current.left + dx } : current
+      );
+    }
+  }, [coords]);
 
   const isBelow =
     coords !== null &&
@@ -94,6 +113,7 @@ export default function InfoTip({ topic, label }: InfoTipProps) {
 
       {coords && (
         <span
+          ref={tooltipRef}
           id={id}
           role="tooltip"
           className={styles.tooltip}

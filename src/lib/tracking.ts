@@ -1,7 +1,8 @@
 import { prisma } from "@/lib/prisma";
 import { getClientIp, hashIp } from "@/lib/ip-hash";
 import { getGeoFromHeaders } from "@/lib/geo";
-import { isBotUserAgent } from "@/lib/bot-detect";
+import { detectBot } from "@/lib/bot-detect";
+import { getRequestHints } from "@/lib/request-hints";
 
 /** Stored when cid query param is missing — email experience is never blocked. */
 export const UNKNOWN_CAMPAIGN = "unknown";
@@ -70,6 +71,8 @@ export async function logEmailEvent(input: LogEventInput): Promise<boolean> {
   const userAgent = request.headers.get("user-agent");
   const ip = getClientIp(request);
   const geo = getGeoFromHeaders(request);
+  const bot = detectBot(userAgent);
+  const hints = getRequestHints(request);
 
   try {
     const created = await prisma.emailEvent.create({
@@ -85,11 +88,19 @@ export async function logEmailEvent(input: LogEventInput): Promise<boolean> {
         ipRegion: geo.region,
         ipCity: geo.city,
         userAgent: userAgent ?? null,
-        isBot: isBotUserAgent(userAgent),
+        isBot: bot.isBot,
+        botReason: bot.reason,
+        acceptLanguage: hints.acceptLanguage,
+        acceptHeader: hints.acceptHeader,
+        secFetchMode: hints.secFetchMode,
+        secFetchDest: hints.secFetchDest,
+        secFetchUser: hints.secFetchUser,
+        secFetchSite: hints.secFetchSite,
+        clientKind: hints.clientKind,
       },
     });
     console.log(
-      `[tracking] wrote ${eventType} event id=${created.id} campaign=${campaignId} link=${linkId ?? "-"}`
+      `[tracking] wrote ${eventType} event id=${created.id} campaign=${campaignId} link=${linkId ?? "-"} kind=${hints.clientKind}${bot.isBot ? ` bot=${bot.reason}` : ""}`
     );
     return true;
   } catch (error) {
@@ -101,7 +112,7 @@ export async function logEmailEvent(input: LogEventInput): Promise<boolean> {
   }
 }
 
-/** Smallest valid transparent 1×1 GIF (43 bytes). */
+/** Smallest valid transparent 1×1 GIF. */
 export const TRANSPARENT_GIF = Buffer.from(
   "R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7",
   "base64"

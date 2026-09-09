@@ -24,12 +24,28 @@ model EmailEvent {
   ipCity         String?  @map("ip_city")
   userAgent      String?  @map("user_agent") @db.Text
   isBot          Boolean  @default(false) @map("is_bot")
+  /// Which bot/scanner pattern matched, when isBot is true.
+  botReason      String?  @map("bot_reason")
   createdAt      DateTime @default(now()) @map("created_at")
+
+  // Request hints captured from Sep 2026. Real browser navigations send the
+  // Sec-Fetch-* headers; programmatic fetchers (link scanners, previewers)
+  // mostly do not. NULL on rows recorded before these were captured.
+  acceptLanguage String?  @map("accept_language")
+  acceptHeader   String?  @map("accept_header") @db.Text
+  secFetchMode   String?  @map("sec_fetch_mode")
+  secFetchDest   String?  @map("sec_fetch_dest")
+  secFetchUser   String?  @map("sec_fetch_user")
+  secFetchSite   String?  @map("sec_fetch_site")
+  /// Derived at write time: navigation | image | other | none.
+  clientKind     String?  @map("client_kind")
 
   @@index([eventType])
   @@index([campaignId])
   @@index([recipientToken])
   @@index([linkId])
   @@index([createdAt])
+  // For clustering near-simultaneous clicks on the same link.
+  @@index([campaignId, linkId, createdAt])
   @@map("email_events")
 }

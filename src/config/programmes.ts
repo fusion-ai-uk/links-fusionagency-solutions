@@ -39,7 +39,47 @@ export interface CampaignDefinition {
   status: CampaignStatus;
   /** Planned transmission date, DD Month YYYY. null while TBC. */
   sendDate: string | null;
+  /**
+   * When the live send began, ISO 8601 with offset — e.g.
+   * "2026-09-10T09:00:00+01:00". Events on the live campaign ID before this
+   * moment are pre-send activity (the build team checking links), not data.
+   * Set it when the status moves to "sent". Leave unset on historic sends that
+   * predate this rule; everything on them counts.
+   */
+  liveFrom?: string | null;
   notes?: string;
+}
+
+/**
+ * Which events on a live campaign ID count as live.
+ *   null            — no restriction (unknown cid, a test cid, or a historic
+ *                     send with no liveFrom recorded)
+ *   { from: null }  — nothing counts yet: the email has not been sent
+ *   { from: Date }  — only events at or after this moment count
+ */
+export interface LiveWindow {
+  campaignId: string;
+  from: Date | null;
+}
+
+export function getLiveWindow(campaignId: string): LiveWindow | null {
+  if (isTestCampaignId(campaignId)) return null;
+  const definition = getCampaignDefinition(campaignId);
+  if (!definition) return null;
+
+  const sent = definition.status === "sent" || definition.status === "closed";
+  if (!sent) return { campaignId, from: null };
+  if (!definition.liveFrom) return null;
+
+  const from = new Date(definition.liveFrom);
+  return Number.isNaN(from.getTime()) ? null : { campaignId, from };
+}
+
+/** Live windows for every campaign in a list that has one. */
+export function getLiveWindows(campaignIds: string[]): LiveWindow[] {
+  return campaignIds
+    .map(getLiveWindow)
+    .filter((w): w is LiveWindow => w !== null);
 }
 
 export interface Programme {
@@ -166,12 +206,16 @@ export const PROGRAMMES: Programme[] = [
         label: "AIDS 2026 Pre-email",
         status: "sent",
         sendDate: "June 2026",
+        // Predates the pre-send rule: everything on the live ID counts.
+        liveFrom: null,
       },
       {
         id: "imi-aids2026-post-congress-jul-2026",
         label: "AIDS 2026 Post-congress",
         status: "sent",
         sendDate: "July 2026",
+        // Predates the pre-send rule: everything on the live ID counts.
+        liveFrom: null,
       },
       {
         id: "imi-aids2026-wave-3",
@@ -194,6 +238,8 @@ export const PROGRAMMES: Programme[] = [
         label: "Lyvdelzi May 2026",
         status: "sent",
         sendDate: "May 2026",
+        // Predates the pre-send rule: everything on the live ID counts.
+        liveFrom: null,
       },
     ],
   },

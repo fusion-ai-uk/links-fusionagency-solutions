@@ -1,16 +1,19 @@
-import { Prisma } from "@prisma/client";
+import { Prisma, type EmailEvent } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { UNKNOWN_CAMPAIGN } from "@/lib/tracking";
+import {
+  buildEventWhere,
+  buildRawWhere,
+  type DashboardFilters,
+} from "@/lib/event-filters";
+import {
+  DEFAULT_ECHO_WINDOW_SECONDS,
+  loadClickClusters,
+  summariseClusters,
+  type DuplicationSummary,
+} from "@/lib/duplication";
 
-export interface DashboardFilters {
-  /**
-   * Restrict to these campaign IDs (a programme's waves, or a single wave).
-   * `null`/`undefined` means no restriction; `[]` means match nothing.
-   */
-  campaignIds?: string[] | null;
-  /** Drop rows flagged by the bot/scanner heuristic. */
-  excludeBots?: boolean;
-}
+export { buildEventWhere, type DashboardFilters } from "@/lib/event-filters";
 
 export interface CampaignMetrics {
   campaignId: string;
@@ -27,7 +30,10 @@ export interface RecentEvent {
   linkId: string | null;
   destinationUrl: string | null;
   ipCountry: string | null;
+  ipCity: string | null;
   isBot: boolean;
+  botReason: string | null;
+  clientKind: string | null;
   createdAt: Date;
 }
 
@@ -39,58 +45,17 @@ export interface DashboardStats {
   clicksByLinkId: { linkId: string; count: number }[];
   metricsByCampaign: CampaignMetrics[];
   recentEvents: RecentEvent[];
+  /** Present when near-simultaneous echoes were collapsed. */
+  collapse: DuplicationSummary | null;
+  /** IDs of events labelled echo or repeat, for marking the recent list. */
+  echoEventIds: Set<string>;
+  repeatEventIds: Set<string>;
 }
 
-/** Rows with a NULL campaign_id are reported as "unknown". */
-function includesUnknown(campaignIds: string[]): boolean {
-  return campaignIds.includes(UNKNOWN_CAMPAIGN);
-}
-
-/** WHERE clause for raw SQL, including the leading `WHERE` (or empty). */
-function buildRawWhere(filters: DashboardFilters): Prisma.Sql {
-  const clauses: Prisma.Sql[] = [];
-  const { campaignIds, excludeBots } = filters;
-
-  if (campaignIds) {
-    if (campaignIds.length === 0) {
-      clauses.push(Prisma.sql`false`);
-    } else {
-      clauses.push(
-        Prisma.sql`COALESCE(campaign_id, ${UNKNOWN_CAMPAIGN}) IN (${Prisma.join(
-          campaignIds
-        )})`
-      );
-    }
-  }
-
-  if (excludeBots) {
-    clauses.push(Prisma.sql`is_bot = false`);
-  }
-
-  if (clauses.length === 0) return Prisma.empty;
-  return Prisma.sql`WHERE ${Prisma.join(clauses, " AND ")}`;
-}
-
-/** Equivalent filter for the Prisma query builder. */
-function buildWhere(filters: DashboardFilters): Prisma.EmailEventWhereInput {
-  const where: Prisma.EmailEventWhereInput = {};
-  const { campaignIds, excludeBots } = filters;
-
-  if (campaignIds) {
-    if (campaignIds.length === 0) {
-      where.campaignId = { in: [] };
-    } else if (includesUnknown(campaignIds)) {
-      where.OR = [{ campaignId: { in: campaignIds } }, { campaignId: null }];
-    } else {
-      where.campaignId = { in: campaignIds };
-    }
-  }
-
-  if (excludeBots) {
-    where.isBot = false;
-  }
-
-  return where;
+export interface DashboardOptions {
+  /** Count one click per near-simultaneous cluster instead of every event. */
+  collapseEchoes?: boolean;
+  echoWindowSeconds?: number;
 }
 
 type CampaignRow = {
@@ -160,12 +125,41 @@ export async function getAllCampaignIdsInDb(): Promise<string[]> {
   return Array.from(ids).sort((a, b) => a.localeCompare(b));
 }
 
-export async function getDashboardStats(
-  filters: DashboardFilters = {}
-): Promise<DashboardStats> {
-  const where = buildWhere(filters);
+function emptyCampaignMetrics(campaignId: string): CampaignMetrics {
+  return {
+    campaignId,
+    opens: 0,
+    clicks: 0,
+    approxUniqueOpens: 0,
+    approxUniqueClicks: 0,
+  };
+}
 
-  const [campaignRows, overallUniques, clicksByLinkRaw, recentEvents] =
+function rowsToMetrics(rows: CampaignRow[]): Map<string, CampaignMetrics> {
+  const byCampaign = new Map<string, CampaignMetrics>();
+  for (const row of rows) {
+    const metrics =
+      byCampaign.get(row.campaign_id) ?? emptyCampaignMetrics(row.campaign_id);
+    if (row.event_type === "open") {
+      metrics.opens = Number(row.total);
+      metrics.approxUniqueOpens = Number(row.approx_unique);
+    } else if (row.event_type === "click") {
+      metrics.clicks = Number(row.total);
+      metrics.approxUniqueClicks = Number(row.approx_unique);
+    }
+    byCampaign.set(row.campaign_id, metrics);
+  }
+  return byCampaign;
+}
+
+export async function getDashboardStats(
+  filters: DashboardFilters = {},
+  options: DashboardOptions = {}
+): Promise<DashboardStats> {
+  const where = buildEventWhere(filters);
+  const windowSeconds = options.echoWindowSeconds ?? DEFAULT_ECHO_WINDOW_SECONDS;
+
+  const [campaignRows, overallUniques, clicksByLinkRaw, recentEvents, clusters] =
     await Promise.all([
       getCampaignRows(filters),
       getOverallUniques(filters),
@@ -186,53 +180,110 @@ export async function getDashboardStats(
           linkId: true,
           destinationUrl: true,
           ipCountry: true,
+          ipCity: true,
           isBot: true,
+          botReason: true,
+          clientKind: true,
           createdAt: true,
         },
       }),
+      // Clusters are always computed so the recent list can flag echoes even
+      // when counts are not being collapsed.
+      loadClickClusters(filters, windowSeconds),
     ]);
 
-  const byCampaign = new Map<string, CampaignMetrics>();
+  const byCampaign = rowsToMetrics(campaignRows);
 
-  for (const row of campaignRows) {
-    const metrics: CampaignMetrics = byCampaign.get(row.campaign_id) ?? {
-      campaignId: row.campaign_id,
-      opens: 0,
-      clicks: 0,
-      approxUniqueOpens: 0,
-      approxUniqueClicks: 0,
-    };
+  const echoEventIds = new Set<string>();
+  const repeatEventIds = new Set<string>();
+  for (const cluster of clusters) {
+    for (const event of cluster.events) {
+      if (event.role === "echo") echoEventIds.add(event.id);
+      if (event.role === "repeat") repeatEventIds.add(event.id);
+    }
+  }
 
-    if (row.event_type === "open") {
-      metrics.opens = Number(row.total);
-      metrics.approxUniqueOpens = Number(row.approx_unique);
-    } else if (row.event_type === "click") {
-      metrics.clicks = Number(row.total);
-      metrics.approxUniqueClicks = Number(row.approx_unique);
+  let clicksByLinkId = clicksByLinkRaw.map((row) => ({
+    linkId: row.linkId ?? "unknown",
+    count: row._count.id,
+  }));
+  let approximateUniqueClicks = overallUniques.get("click") ?? 0;
+  let collapse: DuplicationSummary | null = null;
+
+  if (options.collapseEchoes) {
+    collapse = summariseClusters(clusters, windowSeconds);
+
+    // One click per cluster, everywhere clicks are counted.
+    const perCampaign = new Map<string, number>();
+    const perLink = new Map<string, number>();
+    const primaryKeys = new Set<string>();
+    for (const cluster of clusters) {
+      perCampaign.set(
+        cluster.campaignId,
+        (perCampaign.get(cluster.campaignId) ?? 0) + 1
+      );
+      perLink.set(cluster.linkId, (perLink.get(cluster.linkId) ?? 0) + 1);
+      primaryKeys.add(
+        `${cluster.primary.ipHash ?? ""}|${cluster.primary.userAgent ?? ""}`
+      );
     }
 
-    byCampaign.set(row.campaign_id, metrics);
+    for (const [campaignId, metrics] of byCampaign) {
+      metrics.clicks = perCampaign.get(campaignId) ?? 0;
+    }
+    clicksByLinkId = [...perLink.entries()]
+      .map(([linkId, count]) => ({ linkId, count }))
+      .sort((a, b) => b.count - a.count);
+    approximateUniqueClicks = primaryKeys.size;
   }
 
   const metricsByCampaign = Array.from(byCampaign.values()).sort(
     (a, b) => b.opens + b.clicks - (a.opens + a.clicks)
   );
 
-  const totalOpens = metricsByCampaign.reduce((sum, m) => sum + m.opens, 0);
-  const totalClicks = metricsByCampaign.reduce((sum, m) => sum + m.clicks, 0);
-
   return {
-    totalOpens,
-    totalClicks,
+    totalOpens: metricsByCampaign.reduce((sum, m) => sum + m.opens, 0),
+    totalClicks: metricsByCampaign.reduce((sum, m) => sum + m.clicks, 0),
     approximateUniqueOpens: overallUniques.get("open") ?? 0,
-    approximateUniqueClicks: overallUniques.get("click") ?? 0,
-    clicksByLinkId: clicksByLinkRaw.map((row) => ({
-      linkId: row.linkId ?? "unknown",
-      count: row._count.id,
-    })),
+    approximateUniqueClicks,
+    clicksByLinkId,
     metricsByCampaign,
     recentEvents,
+    collapse,
+    echoEventIds,
+    repeatEventIds,
   };
+}
+
+/**
+ * Per-campaign metrics only — one query. Used for side panels such as the
+ * test-send counters, where the full dashboard payload is not needed.
+ */
+export async function getCampaignMetrics(
+  filters: DashboardFilters,
+  options: DashboardOptions = {}
+): Promise<CampaignMetrics[]> {
+  const rows = await getCampaignRows(filters);
+  const byCampaign = rowsToMetrics(rows);
+
+  if (options.collapseEchoes) {
+    const clusters = await loadClickClusters(
+      filters,
+      options.echoWindowSeconds ?? DEFAULT_ECHO_WINDOW_SECONDS
+    );
+    const perCampaign = new Map<string, number>();
+    for (const cluster of clusters) {
+      perCampaign.set(
+        cluster.campaignId,
+        (perCampaign.get(cluster.campaignId) ?? 0) + 1
+      );
+    }
+    for (const [campaignId, metrics] of byCampaign) {
+      metrics.clicks = perCampaign.get(campaignId) ?? 0;
+    }
+  }
+
+  return Array.from(byCampaign.values());
 }
 
 /** Escape a CSV field per RFC 4180. */
@@ -257,27 +308,19 @@ export const CSV_HEADERS = [
   "ip_city",
   "user_agent",
   "is_bot",
+  "bot_reason",
+  "client_kind",
+  "accept_language",
+  "sec_fetch_mode",
+  "sec_fetch_dest",
+  "sec_fetch_user",
+  "sec_fetch_site",
   "created_at",
   "recipient_token",
   "message_id",
 ] as const;
 
-export function eventToCsvRow(event: {
-  id: string;
-  eventType: string;
-  campaignId: string | null;
-  linkId: string | null;
-  destinationUrl: string | null;
-  ipHash: string | null;
-  ipCountry: string | null;
-  ipRegion: string | null;
-  ipCity: string | null;
-  userAgent: string | null;
-  isBot: boolean;
-  createdAt: Date;
-  recipientToken: string | null;
-  messageId: string | null;
-}): string {
+export function eventToCsvRow(event: EmailEvent): string {
   return [
     event.id,
     event.eventType,
@@ -290,55 +333,17 @@ export function eventToCsvRow(event: {
     event.ipCity,
     event.userAgent,
     event.isBot,
+    event.botReason,
+    event.clientKind,
+    event.acceptLanguage,
+    event.secFetchMode,
+    event.secFetchDest,
+    event.secFetchUser,
+    event.secFetchSite,
     event.createdAt,
     event.recipientToken,
     event.messageId,
   ]
     .map(escapeCsvField)
     .join(",");
-}
-
-/** Shared filter builder so the CSV export matches the dashboard view. */
-export function buildEventWhere(
-  filters: DashboardFilters
-): Prisma.EmailEventWhereInput {
-  return buildWhere(filters);
-}
-
-/**
- * Per-campaign metrics only — one query. Used for side panels such as the
- * test-send counters, where the full dashboard payload is not needed.
- */
-export async function getCampaignMetrics(
-  filters: DashboardFilters
-): Promise<CampaignMetrics[]> {
-  const rows = await getCampaignRows(filters);
-  const byCampaign = new Map<string, CampaignMetrics>();
-
-  for (const row of rows) {
-    const metrics: CampaignMetrics =
-      byCampaign.get(row.campaign_id) ?? emptyCampaignMetrics(row.campaign_id);
-
-    if (row.event_type === "open") {
-      metrics.opens = Number(row.total);
-      metrics.approxUniqueOpens = Number(row.approx_unique);
-    } else if (row.event_type === "click") {
-      metrics.clicks = Number(row.total);
-      metrics.approxUniqueClicks = Number(row.approx_unique);
-    }
-
-    byCampaign.set(row.campaign_id, metrics);
-  }
-
-  return Array.from(byCampaign.values());
-}
-
-function emptyCampaignMetrics(campaignId: string): CampaignMetrics {
-  return {
-    campaignId,
-    opens: 0,
-    clicks: 0,
-    approxUniqueOpens: 0,
-    approxUniqueClicks: 0,
-  };
 }

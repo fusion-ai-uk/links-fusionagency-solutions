@@ -44,6 +44,13 @@
   text-transform: none;
   letter-spacing: 0;
   text-align: left;
+  /* Several triggers sit inside table headers, which set nowrap and uppercase.
+     Reset everything a parent might impose so the panel always wraps. */
+  white-space: normal;
+  word-break: normal;
+  overflow-wrap: anywhere;
+  max-width: calc(100vw - 16px);
+  box-sizing: border-box;
   pointer-events: none;
 }
 
