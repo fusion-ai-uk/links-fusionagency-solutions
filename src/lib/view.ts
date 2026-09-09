@@ -1,11 +1,11 @@
 import { baseCampaignId, isTestCampaignId } from "@/config/programmes";
-import type { TriageInput, TriageResult, Triaged } from "@/lib/triage";
+import type { ConfidenceInput, ConfidenceResult, Assessed } from "@/lib/confidence";
 
 /**
  * The dashboard view model.
  *
- * Every event has exactly one CLASS, derived from its triage result:
- *   test · presend · bot · internal · echo · repeat · genuine
+ * Every event has exactly one CLASS, derived from its confidence assessment:
+ *   test · presend · bot · internal · echo · repeat · confirmed
  *
  * The user chooses which classes count. Every figure on the page — totals,
  * approximate uniques, per-email and per-link counts, the recent list — is
@@ -15,7 +15,7 @@ import type { TriageInput, TriageResult, Triaged } from "@/lib/triage";
  */
 
 export const EVENT_CLASSES = [
-  "genuine",
+  "confirmed",
   "echo",
   "repeat",
   "internal",
@@ -27,11 +27,11 @@ export const EVENT_CLASSES = [
 export type EventClass = (typeof EVENT_CLASSES)[number];
 
 /** What counts by default: every live event, nothing from before the send. */
-export const LIVE_CLASSES: EventClass[] = ["genuine", "echo", "repeat", "internal", "bot"];
+export const LIVE_CLASSES: EventClass[] = ["confirmed", "echo", "repeat", "internal", "bot"];
 
-export const PRESETS: Record<"live" | "genuine" | "everything", EventClass[]> = {
+export const PRESETS: Record<"live" | "confirmed" | "everything", EventClass[]> = {
   live: LIVE_CLASSES,
-  genuine: ["genuine"],
+  confirmed: ["confirmed"],
   everything: [...EVENT_CLASSES],
 };
 
@@ -48,9 +48,9 @@ export interface ClassMeta {
 }
 
 export const CLASS_META: Record<EventClass, ClassMeta> = {
-  genuine: {
-    label: "Genuine",
-    short: "Live events with nothing against them — the figure to report.",
+  confirmed: {
+    label: "Confirmed",
+    short: "Live events with nothing against them — a recipient engaging. The figure to report.",
     colour: "var(--accent-teal)",
     icon: "check",
     opens: true,
@@ -99,11 +99,11 @@ export const CLASS_META: Record<EventClass, ClassMeta> = {
   },
 };
 
-export function classOf(triaged: Triaged | undefined): EventClass {
-  if (!triaged) return "genuine";
-  if (triaged.phase === "test") return "test";
-  if (triaged.phase === "pre-send") return "presend";
-  return triaged.reason ?? "genuine";
+export function classOf(assessed: Assessed | undefined): EventClass {
+  if (!assessed) return "confirmed";
+  if (assessed.phase === "test") return "test";
+  if (assessed.phase === "pre-send") return "presend";
+  return assessed.reason ?? "confirmed";
 }
 
 /**
@@ -120,6 +120,8 @@ export function parseClasses(params: {
     const wanted = params.include
       .split(",")
       .map((s) => s.trim())
+      // "genuine" was the name for confirmed until September 2026.
+      .map((s) => (s === "genuine" ? "confirmed" : s))
       .filter((s): s is EventClass => (EVENT_CLASSES as readonly string[]).includes(s));
     // An explicit empty selection is allowed: it shows zeros, honestly.
     return Array.from(new Set(wanted));
@@ -162,9 +164,9 @@ export interface CampaignView {
   byClass: Record<EventClass, ClassCount>;
 }
 
-export interface ViewEvent extends TriageInput {
+export interface ViewEvent extends ConfidenceInput {
   class: EventClass;
-  triaged: Triaged | undefined;
+  assessed: Assessed | undefined;
 }
 
 export interface DashboardView {
@@ -176,9 +178,9 @@ export interface DashboardView {
   totalClicks: number;
   approxUniqueOpens: number;
   approxUniqueClicks: number;
-  /** Always the genuine figures, whatever is selected — the reference point. */
-  genuineClicks: number;
-  genuineOpens: number;
+  /** Always the confirmed figures, whatever is selected — the reference point. */
+  confirmedClicks: number;
+  confirmedOpens: number;
   clicksByLink: { linkId: string; count: number }[];
   /** One entry per live campaign ID in scope, in the order given. */
   campaigns: CampaignView[];
@@ -201,14 +203,14 @@ const deviceKey = (e: { ipHash: string | null; userAgent: string | null }) =>
   `${e.ipHash ?? ""}|${e.userAgent ?? ""}`;
 
 export function buildView(options: {
-  events: TriageInput[];
-  triage: TriageResult;
+  events: ConfidenceInput[];
+  confidence: ConfidenceResult;
   scopeCampaignIds: string[];
   selectedCampaignIds: string[];
   classes: EventClass[];
   recentLimit?: number;
 }): DashboardView {
-  const { events, triage, scopeCampaignIds, selectedCampaignIds } = options;
+  const { events, confidence, scopeCampaignIds, selectedCampaignIds } = options;
   const classes = new Set(options.classes);
   const selected = new Set(selectedCampaignIds);
   const recentLimit = options.recentLimit ?? 50;
@@ -217,8 +219,8 @@ export function buildView(options: {
     selected.size === 0 || selected.has(baseCampaignId(campaignId ?? "unknown"));
 
   const classified: ViewEvent[] = events.map((e) => {
-    const triaged = triage.byId.get(e.id);
-    return { ...e, class: classOf(triaged), triaged };
+    const assessed = confidence.byId.get(e.id);
+    return { ...e, class: classOf(assessed), assessed };
   });
 
   // Per-email view: every email in scope, all classes tallied, selection applied to totals.
@@ -241,8 +243,8 @@ export function buildView(options: {
   const perLink = new Map<string, number>();
   let totalOpens = 0;
   let totalClicks = 0;
-  let genuineClicks = 0;
-  let genuineOpens = 0;
+  let confirmedClicks = 0;
+  let confirmedOpens = 0;
   let counted = 0;
   let recorded = 0;
   const recent: ViewEvent[] = [];
@@ -276,9 +278,9 @@ export function buildView(options: {
     if (isClick) classCounts[e.class].clicks++;
     else classCounts[e.class].opens++;
 
-    if (e.class === "genuine") {
-      if (isClick) genuineClicks++;
-      else genuineOpens++;
+    if (e.class === "confirmed") {
+      if (isClick) confirmedClicks++;
+      else confirmedOpens++;
     }
 
     if (!classes.has(e.class)) continue;
@@ -311,8 +313,8 @@ export function buildView(options: {
     totalClicks,
     approxUniqueOpens: openDevices.size,
     approxUniqueClicks: clickDevices.size,
-    genuineClicks,
-    genuineOpens,
+    confirmedClicks,
+    confirmedOpens,
     clicksByLink: [...perLink.entries()]
       .map(([linkId, count]) => ({ linkId, count }))
       .sort((a, b) => b.count - a.count),
@@ -328,7 +330,7 @@ export function buildView(options: {
 export function describeClasses(classes: EventClass[]): string {
   const preset = presetFor(classes);
   if (preset === "live") return "all live activity";
-  if (preset === "genuine") return "genuine only";
+  if (preset === "confirmed") return "confirmed only";
   if (preset === "everything") return "everything, including test and pre-send";
   if (classes.length === 0) return "nothing selected";
   return classes.map((c) => CLASS_META[c].label.toLowerCase()).join(" + ");

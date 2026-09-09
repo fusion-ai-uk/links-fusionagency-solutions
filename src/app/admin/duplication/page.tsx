@@ -13,7 +13,7 @@ import {
   type ClusterRole,
   type DuplicationSummary,
 } from "@/lib/duplication";
-import { loadTriage } from "@/lib/triage";
+import { loadConfidence } from "@/lib/confidence";
 import { CLIENT_KIND_LABELS } from "@/lib/request-hints";
 import { BOT_REASON_LABELS } from "@/lib/bot-detect";
 import {
@@ -91,7 +91,7 @@ export default async function DuplicationPage({ searchParams }: PageProps) {
   let dbError: string | null = null;
   let scopeCampaignIds: string[] = [];
   // Live clicks set aside before clustering, so the page agrees with the
-  // dashboard's triage: a bot is a bot first, an internal device is internal.
+  // dashboard's confidence: a bot is a bot first, an internal device is internal.
   let liveClicks = 0;
   let botClicks = 0;
   let internalClicks = 0;
@@ -115,9 +115,9 @@ export default async function DuplicationPage({ searchParams }: PageProps) {
           ? "Unassigned campaign IDs"
           : "All programmes";
 
-    // Same classification as the dashboard: triage first, then cluster only
+    // Same classification as the dashboard: assess confidence first, then cluster only
     // the live clicks that are neither bot nor internal.
-    const tri = await loadTriage(
+    const tri = await loadConfidence(
       scope.selectedCampaignIds.length > 0 ? scope.selectedCampaignIds : scope.programmeCampaignIds,
       windowSeconds
     );
@@ -128,7 +128,7 @@ export default async function DuplicationPage({ searchParams }: PageProps) {
       .filter((e) => {
         if (e.eventType !== "click" || !e.linkId) return false;
         const reason = tri.byId.get(e.id)?.reason;
-        return reason === "genuine" || reason === "echo" || reason === "repeat";
+        return reason === "confirmed" || reason === "echo" || reason === "repeat";
       })
       .map((e) => ({ ...e, campaignId: e.campaignId ?? "unknown", linkId: e.linkId as string }));
     clusters = clusterClicks(clusterable, windowSeconds);

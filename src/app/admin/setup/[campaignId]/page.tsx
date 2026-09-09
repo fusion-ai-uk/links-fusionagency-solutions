@@ -17,15 +17,15 @@ import {
   buildPixelSnippet,
   buildPixelUrl,
 } from "@/lib/tracking-urls";
-import { formatUkTime, UK_TIME_LABEL } from "@/lib/time";
+import { formatUkDate, formatUkTime, UK_TIME_LABEL } from "@/lib/time";
 import {
-  loadTriage,
+  loadConfidence,
   PHASE_LABELS,
   REASON_LABELS,
   type Phase,
-  type TriageInput,
-  type TriageResult,
-} from "@/lib/triage";
+  type ConfidenceInput,
+  type ConfidenceResult,
+} from "@/lib/confidence";
 import InfoTip from "@/components/InfoTip";
 import CopyButton from "../../CopyButton";
 import styles from "../../admin.module.css";
@@ -65,22 +65,22 @@ export default async function CampaignSetupPage({ params }: PageProps) {
   const liveWindow = getLiveWindow(campaignId);
   const isSent = status === "sent" || status === "closed";
 
-  let triage: (TriageResult & { events: TriageInput[] }) | null = null;
+  let confidence: (ConfidenceResult & { events: ConfidenceInput[] }) | null = null;
   let dbError: string | null = null;
   try {
-    triage = await loadTriage([campaignId]);
+    confidence = await loadConfidence([campaignId]);
   } catch (error) {
     dbError = error instanceof Error ? error.message : String(error);
-    console.error("[admin/setup] triage query failed:", error);
+    console.error("[admin/setup] confidence query failed:", error);
   }
 
   // Per-link and pixel counts by phase.
   const opens = zero();
   const clicksByLink = new Map<string, PhaseCounts>();
   const unexpectedLinks = new Set<string>();
-  const events = triage?.events ?? [];
+  const events = confidence?.events ?? [];
   for (const e of events) {
-    const phase = triage!.byId.get(e.id)?.phase ?? "live";
+    const phase = confidence!.byId.get(e.id)?.phase ?? "live";
     if (e.eventType === "open") {
       opens[phase]++;
     } else if (e.linkId) {
@@ -97,7 +97,7 @@ export default async function CampaignSetupPage({ params }: PageProps) {
   const testOpens = opens.test + opens["pre-send"];
   const testVerified = testOpens > 0 && testedLinks.length === linkIds.length;
   const liveClicks = [...clicksByLink.values()].reduce((s, c) => s + c.live, 0);
-  const genuineClicks = triage?.clicks.genuine ?? 0;
+  const confirmedClicks = confidence?.clicks.confirmed ?? 0;
 
   const recent = [...events]
     .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
@@ -115,6 +115,8 @@ export default async function CampaignSetupPage({ params }: PageProps) {
     destinations: linkMap ?? {},
   });
 
+  const send = confidence?.sends.get(campaignId) ?? null;
+  const sendDetected = send?.source === "detected";
   const liveFromText =
     liveWindow === null
       ? isSent
@@ -122,7 +124,9 @@ export default async function CampaignSetupPage({ params }: PageProps) {
         : "not applicable"
       : liveWindow.from
         ? `${formatUkTime(liveWindow.from)} ${UK_TIME_LABEL}`
-        : "not sent yet — all live-ID events are pre-send";
+        : sendDetected && send
+          ? `${formatUkTime(send.at)} ${UK_TIME_LABEL} — detected from ${send.detected?.opensThatDay ?? "50+"} opens that day; confirm in config`
+          : "not sent yet — all live-ID events are pre-send";
 
   // The process, as it actually runs: HTML → Michael → pack → Steve tests → live.
   const steps: { done: boolean; title: string; detail: string }[] = [
@@ -149,11 +153,13 @@ export default async function CampaignSetupPage({ params }: PageProps) {
         : `${testOpens} test open${testOpens === 1 ? "" : "s"} so far${linkIds.length > 0 ? `; ${testedLinks.length} of ${linkIds.length} links clicked` : ""}. Clicks on the live URLs before the send count here too.`,
     },
     {
-      done: isSent && liveClicks + opens.live > 0,
-      title: "Live send — genuine events arriving",
-      detail: !isSent
-        ? "Not sent yet. Michael marks the send and its live-from moment; only events after that are live."
-        : `${opens.live} live open${opens.live === 1 ? "" : "s"}, ${liveClicks} live click${liveClicks === 1 ? "" : "s"} — ${genuineClicks} genuine after triage. Live from ${liveFromText}.`,
+      done: (isSent || sendDetected) && liveClicks + opens.live > 0,
+      title: "Live send — confirmed events arriving",
+      detail: !isSent && !sendDetected
+        ? "Not sent yet. The send is detected automatically from the first burst of opens; Michael then confirms it in config."
+        : sendDetected
+          ? `Send detected ${liveFromText}. ${opens.live} live open${opens.live === 1 ? "" : "s"}, ${liveClicks} live click${liveClicks === 1 ? "" : "s"} — ${confirmedClicks} confirmed.`
+        : `${opens.live} live open${opens.live === 1 ? "" : "s"}, ${liveClicks} live click${liveClicks === 1 ? "" : "s"} — ${confirmedClicks} confirmed. Live from ${liveFromText}.`,
     },
   ];
 
@@ -194,6 +200,15 @@ export default async function CampaignSetupPage({ params }: PageProps) {
         </div>
       )}
 
+      {sendDetected && send && (
+        <div className={styles.notice}>
+          <div className={styles.noticeHead}>Send detected — {formatUkTime(send.at)} {UK_TIME_LABEL}</div>
+          {send.detected?.opensThatDay ?? "50+"} opens landed on the live ID that day, so the send is taken to have begun at the start of that
+          burst. Events before it are pre-send; events from it are live. To confirm, Michael sets status <code>sent</code> and{" "}
+          <code>liveFrom: &quot;{send.at.toISOString()}&quot;</code> in <code>src/config/programmes.ts</code>.
+        </div>
+      )}
+
       {isSent && definition?.liveFrom === undefined && (
         <div className={styles.warnBanner}>
           <strong>Sent, but no live-from moment recorded</strong>
@@ -231,7 +246,9 @@ export default async function CampaignSetupPage({ params }: PageProps) {
         </div>
         <div className={styles.setupMetaItem}>
           <span className={styles.setupMetaLabel}>Send date</span>
-          <span className={styles.setupMetaValue}>{definition?.sendDate ?? "TBC"}</span>
+          <span className={styles.setupMetaValue}>
+            {send ? `${formatUkDate(send.at)}${send.source === "detected" ? " (detected)" : ""}` : definition?.sendDate ?? "TBC"}
+          </span>
         </div>
         <div className={styles.setupMetaItem}>
           <span className={styles.setupMetaLabel}>
@@ -251,10 +268,10 @@ export default async function CampaignSetupPage({ params }: PageProps) {
         </div>
         <div className={styles.setupMetaItem}>
           <span className={styles.setupMetaLabel}>
-            Genuine clicks
-            <InfoTip topic="triage" />
+            Confirmed clicks
+            <InfoTip topic="confidence" />
           </span>
-          <span className={styles.setupMetaValue}>{genuineClicks}</span>
+          <span className={styles.setupMetaValue}>{confirmedClicks}</span>
         </div>
       </section>
 
@@ -391,12 +408,12 @@ export default async function CampaignSetupPage({ params }: PageProps) {
                   <th>Link ID</th>
                   <th>Location</th>
                   <th>Browser · OS</th>
-                  <th>Triage</th>
+                  <th>Confidence</th>
                 </tr>
               </thead>
               <tbody>
                 {recent.map((event) => {
-                  const t = triage!.byId.get(event.id);
+                  const t = confidence!.byId.get(event.id);
                   const phase = t?.phase ?? "live";
                   return (
                     <tr key={event.id}>
@@ -419,7 +436,7 @@ export default async function CampaignSetupPage({ params }: PageProps) {
                         {t?.reason ? (
                           <span
                             className={`${styles.pill} ${
-                              t.reason === "genuine" ? styles.pillOk : t.reason === "bot" ? styles.pillPending : styles.pillInReview
+                              t.reason === "confirmed" ? styles.pillOk : t.reason === "bot" ? styles.pillPending : styles.pillInReview
                             }`}
                           >
                             {REASON_LABELS[t.reason]}

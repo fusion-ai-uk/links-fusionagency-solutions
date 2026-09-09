@@ -47,6 +47,12 @@ export interface CampaignDefinition {
    * predate this rule; everything on them counts.
    */
   liveFrom?: string | null;
+  /**
+   * Opens in one UK day that mark the send as having happened, when the status
+   * has not yet been moved to "sent". Defaults to SEND_DETECTION_MIN_OPENS_PER_DAY
+   * (50). Lower it for a small audience.
+   */
+  detectSendAtOpens?: number;
   notes?: string;
 }
 

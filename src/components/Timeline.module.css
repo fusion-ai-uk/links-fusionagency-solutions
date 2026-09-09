@@ -1,0 +1,394 @@
+/* Timeline — one email's opens and clicks over time. */
+
+.wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.6rem 1rem;
+}
+
+.group {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.groupLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+.select {
+  min-width: 230px;
+  max-width: 100%;
+  padding: 0.42rem 2rem 0.42rem 0.7rem;
+  background: var(--surface-well)
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23c7d0dc' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")
+    no-repeat right 0.6rem center / 12px;
+  border: 1px solid var(--border);
+  border-radius: 0;
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 0.86rem;
+  appearance: none;
+  cursor: pointer;
+}
+
+.select:focus-visible {
+  outline: 2px solid var(--accent-cyan);
+  outline-offset: 1px;
+}
+
+.segmented {
+  display: inline-flex;
+}
+
+.segment {
+  padding: 0.3rem 0.65rem;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  cursor: pointer;
+}
+
+.segment + .segment {
+  margin-left: -1px;
+}
+
+.segmentOn {
+  background: var(--surface-raised);
+  border-color: var(--accent-cyan);
+  color: var(--text-primary);
+  position: relative;
+  z-index: 1;
+}
+
+.legend {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.35rem 1rem;
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--text-tertiary);
+}
+
+.legendItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.swatchBar {
+  width: 10px;
+  height: 10px;
+  background: var(--accent-cyan);
+  opacity: 0.85;
+}
+
+.swatchLine {
+  width: 16px;
+  height: 0;
+  border-top: 2px solid var(--accent-orange);
+  position: relative;
+}
+
+.swatchLine::after {
+  content: "";
+  position: absolute;
+  left: 5px;
+  top: -4px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent-orange);
+}
+
+.swatchSend {
+  width: 0;
+  height: 12px;
+  border-left: 2px dashed var(--text-secondary);
+}
+
+.swatchFlag {
+  color: var(--accent-orange);
+  display: inline-flex;
+}
+
+.chartArea {
+  position: relative;
+  border: 1px solid var(--border-soft);
+  background: var(--surface-well);
+  min-height: 300px;
+}
+
+.svg {
+  display: block;
+  width: 100%;
+  height: 300px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  user-select: none;
+  touch-action: pan-y;
+}
+
+.grid {
+  stroke: var(--border-soft);
+  stroke-width: 1;
+}
+
+.axis {
+  fill: var(--text-tertiary);
+}
+
+.axisRight {
+  fill: var(--accent-orange);
+}
+
+.axisLeft {
+  fill: var(--accent-cyan);
+}
+
+.bar {
+  fill: var(--accent-cyan);
+  opacity: 0.8;
+  transition: opacity 120ms ease;
+}
+
+.barHot {
+  opacity: 1;
+}
+
+.barDim {
+  opacity: 0.45;
+}
+
+.line {
+  fill: none;
+  stroke: var(--accent-orange);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.dot {
+  fill: var(--accent-orange);
+  stroke: var(--surface-well);
+  stroke-width: 1.5;
+}
+
+.presend {
+  fill: var(--surface-inset);
+  opacity: 0.55;
+}
+
+.sendLine {
+  stroke: var(--text-secondary);
+  stroke-width: 1.5;
+  stroke-dasharray: 4 4;
+}
+
+.sendLabel {
+  fill: var(--text-primary);
+  font-weight: 600;
+}
+
+.sendLabelBg {
+  fill: var(--surface-raised);
+  stroke: var(--border);
+}
+
+.flag {
+  fill: var(--accent-orange);
+}
+
+.flagText {
+  fill: var(--accent-orange);
+  font-size: 10px;
+}
+
+.hover {
+  fill: var(--text-primary);
+  opacity: 0.06;
+}
+
+.tooltip {
+  position: absolute;
+  top: 8px;
+  min-width: 160px;
+  max-width: 240px;
+  padding: 0.5rem 0.65rem;
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent-cyan);
+  color: var(--text-primary);
+  font-size: 0.8rem;
+  line-height: 1.45;
+  pointer-events: none;
+  z-index: 3;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+}
+
+.tooltipTitle {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.04em;
+  color: var(--text-tertiary);
+  margin-bottom: 0.2rem;
+}
+
+.tooltipRow {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.tooltipOpens {
+  color: var(--accent-cyan);
+}
+
+.tooltipClicks {
+  color: var(--accent-orange);
+}
+
+.tooltipNote {
+  display: block;
+  margin-top: 0.3rem;
+  padding-top: 0.3rem;
+  border-top: 1px solid var(--border-soft);
+  color: var(--text-secondary);
+  font-size: 0.74rem;
+}
+
+.empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  padding: 1rem;
+  text-align: center;
+  color: var(--text-tertiary);
+  font-size: 0.86rem;
+}
+
+.empty strong {
+  color: var(--text-secondary);
+}
+
+.footer {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.4rem 1.2rem;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  line-height: 1.5;
+  color: var(--text-tertiary);
+}
+
+.footer strong {
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.sendChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.12rem 0.5rem;
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+}
+
+.sendChipDetected {
+  border-color: var(--accent-orange);
+  color: var(--accent-orange);
+}
+
+.tableToggle {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.22rem 0.55rem;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  cursor: pointer;
+}
+
+.tableToggle:hover {
+  border-color: var(--accent-cyan);
+  color: var(--text-primary);
+}
+
+.tableScroll {
+  max-height: 320px;
+  overflow: auto;
+  border: 1px solid var(--border-soft);
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+}
+
+.table th,
+.table td {
+  padding: 0.35rem 0.65rem;
+  text-align: left;
+  border-bottom: 1px solid var(--border-soft);
+  white-space: nowrap;
+}
+
+.table th {
+  position: sticky;
+  top: 0;
+  background: var(--surface-card);
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+.numeric {
+  text-align: right !important;
+  font-family: var(--font-mono);
+}
+
+.rowSend td {
+  background: var(--surface-subtle);
+}
+
+@media (max-width: 720px) {
+  .legend {
+    margin-left: 0;
+  }
+  .select {
+    min-width: 0;
+    flex: 1 1 auto;
+  }
+}

@@ -6,10 +6,12 @@ import { getAllCampaignIdsInDb } from "@/lib/dashboard";
 import { ECHO_WINDOW_OPTIONS, parseEchoWindow } from "@/lib/duplication";
 import { CLIENT_KIND_LABELS } from "@/lib/request-hints";
 import { BOT_REASON_LABELS } from "@/lib/bot-detect";
-import { formatUkTime, UK_TIME_LABEL } from "@/lib/time";
-import { loadTriage, type TriageInput, type TriageResult } from "@/lib/triage";
+import { formatUkDate, formatUkTime, UK_TIME_LABEL } from "@/lib/time";
+import { loadConfidence, type ConfidenceInput, type ConfidenceResult, type SendInfo } from "@/lib/confidence";
+import { buildTimeline, type TimelineData } from "@/lib/timeline";
 import {
   buildView,
+  classOf,
   CLASS_META,
   describeClasses,
   EVENT_CLASSES,
@@ -38,6 +40,7 @@ import InfoTip from "@/components/InfoTip";
 import Icon from "@/components/Icon";
 import Collapsible from "@/components/Collapsible";
 import FilterBar, { type WaveOption } from "@/components/FilterBar";
+import Timeline, { type TimelineOption } from "@/components/Timeline";
 import { logoutAction } from "./actions";
 import styles from "./admin.module.css";
 
@@ -49,6 +52,8 @@ type SearchParams = {
   campaign?: string | string[];
   include?: string;
   window?: string;
+  /** The email shown on the timeline. */
+  timeline?: string;
   q?: string;
   status?: string;
   // Older links
@@ -81,7 +86,7 @@ const STATUS_PILL_CLASS: Record<CampaignStatus, string> = {
 const STATUS_ORDER: CampaignStatus[] = ["planned", "in-review", "ready", "sent", "closed"];
 
 const CLASS_PILL: Record<EventClass, string> = {
-  genuine: styles.pillOk,
+  confirmed: styles.pillOk,
   echo: styles.roleEcho,
   repeat: styles.roleRepeat,
   internal: styles.pillReady,
@@ -103,6 +108,7 @@ function buildHref(
     campaign?: string[];
     include?: string | null;
     window?: string;
+    timeline?: string;
     q?: string;
     status?: string;
   }
@@ -112,6 +118,7 @@ function buildHref(
   for (const id of parts.campaign ?? []) search.append("campaign", id);
   if (parts.include) search.set("include", parts.include);
   if (parts.window) search.set("window", parts.window);
+  if (parts.timeline) search.set("timeline", parts.timeline);
   if (parts.q) search.set("q", parts.q);
   if (parts.status) search.set("status", parts.status);
   const query = search.toString();
@@ -138,7 +145,7 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
 
   let dbCampaignIds: string[] = [];
   let scope: ReturnType<typeof resolveScope> | null = null;
-  let triage: (TriageResult & { events: TriageInput[] }) | null = null;
+  let confidence: (ConfidenceResult & { events: ConfidenceInput[] }) | null = null;
   let dbError: string | null = null;
 
   try {
@@ -149,7 +156,7 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
       dbCampaignIds,
       includeTests: true, // the view decides what counts; load everything in scope
     });
-    triage = await loadTriage(scope.programmeCampaignIds, echoWindowSeconds);
+    confidence = await loadConfidence(scope.programmeCampaignIds, echoWindowSeconds);
   } catch (error) {
     dbError = error instanceof Error ? error.message : String(error);
     console.error("[admin] dashboard query failed:", error);
@@ -178,7 +185,7 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
     </header>
   );
 
-  if (!scope || !triage) {
+  if (!scope || !confidence) {
     return (
       <div className={styles.page}>
         {header}
@@ -199,8 +206,8 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
   }
 
   const view: DashboardView = buildView({
-    events: triage.events,
-    triage,
+    events: confidence.events,
+    confidence,
     scopeCampaignIds: scope.programmeCampaignIds,
     selectedCampaignIds: scope.selectedCampaignIds,
     classes,
@@ -272,6 +279,8 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
   const awaitingSetup = staticRows.filter((row) => !row.hasTrackedLinks).length;
   const hasAnyCounted = view.totalOpens + view.totalClicks > 0;
 
+  // Focusing an email from the table also moves the timeline to it, so the
+  // explicit timeline choice is deliberately not carried on these links.
   const rowHref = (id: string) =>
     buildHref("/admin", {
       programme: scope!.programmeId,
@@ -279,6 +288,55 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
       include: includeParam,
       window: params.window,
     });
+
+  // ---- Timeline: one email at a time ------------------------------------
+  // Explicit choice in the URL wins; then a single selected email; then the
+  // email in scope with the most recent activity.
+  const lastActivity = new Map<string, number>();
+  for (const e of confidence.events) {
+    const base = e.campaignId ? e.campaignId.replace(/-test$/, "") : "unknown";
+    const t = e.createdAt.getTime();
+    if ((lastActivity.get(base) ?? 0) < t) lastActivity.set(base, t);
+  }
+  const timelineId: string | null =
+    params.timeline && scope.programmeCampaignIds.includes(params.timeline)
+      ? params.timeline
+      : scope.selectedCampaignIds.length === 1
+        ? scope.selectedCampaignIds[0]
+        : [...staticRows].sort((a, b) => (lastActivity.get(b.id) ?? 0) - (lastActivity.get(a.id) ?? 0))[0]?.id ?? null;
+  const timelineParam = params.timeline && params.timeline === timelineId ? params.timeline : undefined;
+
+  let timelineData: TimelineData | null = null;
+  if (timelineId) {
+    const row = staticRows.find((r) => r.id === timelineId);
+    const timelineEvents = confidence.events
+      .filter((e) => (e.campaignId ? e.campaignId.replace(/-test$/, "") : "unknown") === timelineId)
+      .filter((e) => view.classes.has(classOf(confidence!.byId.get(e.id))))
+      .map((e) => ({ eventType: e.eventType, createdAt: e.createdAt }));
+    timelineData = buildTimeline({
+      campaignId: timelineId,
+      label: row?.label ?? timelineId,
+      events: timelineEvents,
+      send: confidence.sends.get(timelineId) ?? null,
+      opensByDay: confidence.opensByDay.get(timelineId),
+    });
+  }
+  const timelineOptions: TimelineOption[] = staticRows.map((row) => ({
+    id: row.id,
+    label: row.label,
+    href: buildHref("/admin", {
+      programme: scope!.programmeId,
+      campaign: scope!.selectedCampaignIds,
+      include: includeParam,
+      window: params.window,
+      timeline: row.id,
+      q: query || undefined,
+      status: statusFilter ?? undefined,
+    }),
+  }));
+  const detectedSends = staticRows
+    .map((row) => confidence!.sends.get(row.id))
+    .filter((s): s is SendInfo => s !== undefined && s.source === "detected");
 
   return (
     <div className={styles.page}>
@@ -339,6 +397,7 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
           classCounts={view.classCounts}
           windowSeconds={echoWindowSeconds}
           windowOptions={ECHO_WINDOW_OPTIONS}
+          timeline={timelineParam}
           q={query || undefined}
           status={statusFilter ?? undefined}
           exportHref={exportHref}
@@ -400,14 +459,14 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
           </div>
           <div className={styles.statCard} style={{ ["--item-accent" as string]: "var(--accent-teal)" }}>
             <span className={styles.statLabel}>
-              Genuine clicks
-              <InfoTip topic="triage" />
+              Confirmed clicks
+              <InfoTip topic="confidence" />
             </span>
-            <span className={styles.statValue}>{n(view.genuineClicks)}</span>
+            <span className={styles.statValue}>{n(view.confirmedClicks)}</span>
             <span className={styles.statHint}>
-              {view.classes.has("genuine") && view.classes.size === 1
+              {view.classes.has("confirmed") && view.classes.size === 1
                 ? "This is what the figures show."
-                : "The figure to report. Preset: Genuine only."}
+                : "Recipients clicking. The figure to report."}
             </span>
           </div>
           <div className={styles.statCard} style={{ ["--item-accent" as string]: accentFor(4) }}>
@@ -423,6 +482,31 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
           {SOURCE_LINE} Counting {describeClasses(classes)}
           {!view.classes.has("echo") && !view.classes.has("repeat") && ` — near-simultaneous clicks within ${echoWindowSeconds}s collapsed to one`}.
         </p>
+
+        {/* ---- Timeline ------------------------------------------------------- */}
+        <section className={`${styles.panel} ${styles.panelSpaced}`} style={{ borderLeft: "var(--accent-bar) solid var(--accent-cyan)" }}>
+          <div className={styles.sectionTitleRow}>
+            <div className={styles.sectionTitleGroup}>
+              <h2>
+                <Icon name="chart" size={16} /> Timeline
+              </h2>
+              <InfoTip topic="timeline" />
+            </div>
+            <p className={styles.sectionHint}>
+              One email at a time · {UK_TIME_LABEL} · follows the chips
+              {detectedSends.length > 0 && (
+                <>
+                  {" · "}
+                  <span style={{ color: "var(--accent-orange)" }}>
+                    send detected for {detectedSends.length} email{detectedSends.length === 1 ? "" : "s"}
+                  </span>
+                  <InfoTip topic="sendDetection" />
+                </>
+              )}
+            </p>
+          </div>
+          <Timeline data={timelineData} options={timelineOptions} selectedId={timelineId} />
+        </section>
 
         {/* ---- The emails ----------------------------------------------------- */}
         <section className={`${styles.panel} ${styles.panelSpaced}`} style={{ borderLeft: `var(--accent-bar) solid ${scopeAccent}` }}>
@@ -512,8 +596,8 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
                       <InfoTip topic="totalClicks" />
                     </th>
                     <th className={styles.numeric}>
-                      Genuine
-                      <InfoTip topic="triage" />
+                      Confirmed
+                      <InfoTip topic="confidence" />
                     </th>
                     <th className={styles.numeric}>
                       Clicks/open
@@ -528,6 +612,7 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
                       key={row.id}
                       row={row}
                       view={viewByCampaign.get(row.id)}
+                      send={confidence!.sends.get(row.id) ?? null}
                       selected={scope!.selectedCampaignIds.includes(row.id)}
                       anySelected={scope!.selectedCampaignIds.length > 0}
                       focusHref={rowHref(row.id)}
@@ -550,30 +635,31 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
 
         {/* ---- Collapsibles ---------------------------------------------------- */}
         <Collapsible
-          id="triage"
+          id="confidence"
           title={
             <>
-              <Icon name="pulse" /> Click triage
+              <Icon name="pulse" /> Click confidence
             </>
           }
           accent="var(--accent-teal)"
           summary={
             <>
-              <span className={styles.chip}>raw {n(triage.clicks.raw)}</span>
-              <span className={styles.chip}>live {n(triage.clicks.live)}</span>
-              <span className={styles.chip}>bot {n(triage.clicks.bot)}</span>
-              <span className={styles.chip}>internal {n(triage.clicks.internal)}</span>
-              <span className={styles.chip}>echo {n(triage.clicks.echo)}</span>
-              <span className={styles.chip}>repeat {n(triage.clicks.repeat)}</span>
+              <span className={styles.chip}>raw {n(confidence.clicks.raw)}</span>
+              <span className={styles.chip}>live {n(confidence.clicks.live)}</span>
+              <span className={styles.chip}>bot {n(confidence.clicks.bot)}</span>
+              <span className={styles.chip}>internal {n(confidence.clicks.internal)}</span>
+              <span className={styles.chip}>echo {n(confidence.clicks.echo)}</span>
+              <span className={styles.chip}>repeat {n(confidence.clicks.repeat)}</span>
               <span className={`${styles.chip} ${styles.chipStrong}`} style={{ ["--item-accent" as string]: "var(--accent-teal)" }}>
-                genuine {n(triage.clicks.genuine)}
+                confirmed {n(confidence.clicks.confirmed)}
               </span>
             </>
           }
-          aside={<InfoTip topic="triage" />}
+          aside={<InfoTip topic="confidence" />}
         >
           <p className={styles.sectionHint} style={{ margin: "0.75rem 0" }}>
-            Every click in scope, classified once. The chips in the bar choose which of these rows the figures count.
+            Every click in scope, labelled once by how sure we are it was a recipient. Most are confirmed; the rest are shown so they can be set
+            aside. The chips in the bar choose which of these rows the figures count.
           </p>
           <div className={styles.tableScroll}>
             <table className={styles.table}>
@@ -588,14 +674,14 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
               <tbody>
                 {(
                   [
-                    ["Raw events", triage.clicks.raw, triage.opens.raw, "Everything recorded on these campaign IDs and their -test twins.", true],
-                    ["− Test", triage.clicks.test, triage.opens.test, "On a -test campaign ID.", false],
-                    ["− Pre-send", triage.clicks.preSend, triage.opens.preSend, "On the live ID before the email was sent.", false],
-                    ["= Live", triage.clicks.live, triage.opens.live, "The default view counts these.", true],
-                    ["− Likely bot", triage.clicks.bot, triage.opens.bot, "Scanner, proxy or automation user agent.", false],
-                    ["− Likely internal", triage.clicks.internal, triage.opens.internal, `A device that had produced test or pre-send events (${triage.internalDevices} device${triage.internalDevices === 1 ? "" : "s"}).`, false],
-                    ["− Scanner echo", triage.clicks.echo, null, "Same link, seconds apart, different address.", false],
-                    ["− Repeat", triage.clicks.repeat, null, "Same link, seconds apart, same address.", false],
+                    ["Raw events", confidence.clicks.raw, confidence.opens.raw, "Everything recorded on these campaign IDs and their -test twins.", true],
+                    ["− Test", confidence.clicks.test, confidence.opens.test, "On a -test campaign ID.", false],
+                    ["− Pre-send", confidence.clicks.preSend, confidence.opens.preSend, "On the live ID before the email was sent.", false],
+                    ["= Live", confidence.clicks.live, confidence.opens.live, "The default view counts these.", true],
+                    ["− Likely bot", confidence.clicks.bot, confidence.opens.bot, "Scanner, proxy or automation user agent.", false],
+                    ["− Likely internal", confidence.clicks.internal, confidence.opens.internal, `A device that had produced test or pre-send events (${confidence.internalDevices} device${confidence.internalDevices === 1 ? "" : "s"}).`, false],
+                    ["− Scanner echo", confidence.clicks.echo, null, "Same link, seconds apart, different address.", false],
+                    ["− Repeat", confidence.clicks.repeat, null, "Same link, seconds apart, same address.", false],
                   ] as [string, number, number | null, string, boolean][]
                 ).map(([stage, clicks, opens, meaning, bold]) => (
                   <tr key={stage}>
@@ -606,20 +692,20 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
                   </tr>
                 ))}
                 <tr className={styles.rowSelected}>
-                  <td className={styles.rowHead}>= Genuine</td>
-                  <td className={`${styles.numeric} ${styles.rowHead}`}>{n(triage.clicks.genuine)}</td>
-                  <td className={`${styles.numeric} ${styles.rowHead}`}>{n(triage.opens.genuine)}</td>
+                  <td className={styles.rowHead}>= Confirmed</td>
+                  <td className={`${styles.numeric} ${styles.rowHead}`}>{n(confidence.clicks.confirmed)}</td>
+                  <td className={`${styles.numeric} ${styles.rowHead}`}>{n(confidence.opens.confirmed)}</td>
                   <td className={styles.rowNote} style={{ display: "table-cell" }}>
-                    Approx. {n(triage.genuineApproxUniqueClicks)} distinct device{triage.genuineApproxUniqueClicks === 1 ? "" : "s"} clicking,{" "}
-                    {n(triage.genuineApproxUniqueOpens)} opening. Opens remain estimates.
+                    Approx. {n(confidence.confirmedApproxUniqueClicks)} distinct device{confidence.confirmedApproxUniqueClicks === 1 ? "" : "s"} clicking,{" "}
+                    {n(confidence.confirmedApproxUniqueOpens)} opening. Opens remain estimates.
                   </td>
                 </tr>
               </tbody>
             </table>
           </div>
           <p className={styles.sourceLine}>
-            Phase from each email&rsquo;s status and live-from; reason applied in the order shown, first match wins. Nothing is stored — a corrected
-            live-from re-triages history. The CSV export carries phase and reason per row.{" "}
+            Phase from each email&rsquo;s status and live-from (or the detected send); labels applied in the order shown, first match wins. Nothing
+            is stored — a corrected live-from re-assesses history. The CSV export carries phase and confidence per row.{" "}
             <Link href={duplicationHref}>
               Open the duplication analysis <Icon name="external" size={11} />
             </Link>
@@ -798,7 +884,7 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
           <p className={styles.programmeDescription} style={{ paddingTop: "0.75rem" }}>
             Opens are <strong>estimates</strong>: mail clients block, cache and pre-load tracking pixels, so opens are under-counted and over-counted
             at the same time. Approximate unique counts group by hashed IP address and mail client — a rough de-duplication,{" "}
-            <strong>not a count of people</strong>. Clicks are the dependable signal, and <em>Genuine clicks</em> is the dependable click figure: it
+            <strong>not a count of people</strong>. Clicks are the dependable signal, and <em>Confirmed clicks</em> is the dependable click figure: it
             leaves out test and pre-send activity, likely bots, likely internal devices, scanner echoes and repeats.
           </p>
         </Collapsible>
@@ -814,12 +900,14 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
 function WaveRow({
   row,
   view,
+  send,
   selected,
   anySelected,
   focusHref,
 }: {
   row: CampaignRowView;
   view: DashboardView["campaigns"][number] | undefined;
+  send: SendInfo | null;
   selected: boolean;
   anySelected: boolean;
   focusHref: string;
@@ -830,6 +918,7 @@ function WaveRow({
   const notes: string[] = [];
   if (testEvents > 0) notes.push(`${testEvents} test`);
   if (preSendEvents > 0) notes.push(`${preSendEvents} pre-send`);
+  const sendDetected = send?.source === "detected";
 
   return (
     <tr className={selected ? styles.rowSelected : undefined} style={anySelected && !selected ? { opacity: 0.55 } : undefined}>
@@ -850,6 +939,14 @@ function WaveRow({
             {"// sent without a live-from — pre-send clicks are counting as live"}
           </span>
         )}
+        {sendDetected && send && (
+          <span
+            className={styles.rowNoteAccent}
+            title={`${send.detected?.opensThatDay ?? "50+"} opens on the send day. Counting live from this moment until the send is recorded in config (status sent + liveFrom).`}
+          >
+            {`// send detected ${formatUkTime(send.at)} ${UK_TIME_LABEL} — live from then; confirm in config`}
+          </span>
+        )}
       </td>
       <td>
         {row.status ? (
@@ -857,8 +954,25 @@ function WaveRow({
         ) : (
           <span className={`${styles.pill} ${styles.pillNone}`}>Not defined</span>
         )}
+        {sendDetected && (
+          <>
+            {" "}
+            <span className={`${styles.pill} ${styles.pillSent}`} title="Detected from a burst of opens; see Send detection">
+              <Icon name="send" size={10} /> Send detected
+            </span>
+          </>
+        )}
       </td>
-      <td>{row.sendDate ?? "TBC"}</td>
+      <td>
+        {send ? (
+          <span title={`${formatUkTime(send.at)} ${UK_TIME_LABEL} — ${send.source === "config" ? "recorded in config" : "detected from the data"}`}>
+            {formatUkDate(send.at)}
+            <span className={styles.rowNote}>{send.source === "config" ? "recorded" : "detected"}</span>
+          </span>
+        ) : (
+          row.sendDate ?? "TBC"
+        )}
+      </td>
       <td>
         {row.hasTrackedLinks ? (
           <span className={`${styles.pill} ${styles.pillOk}`}>
@@ -870,7 +984,7 @@ function WaveRow({
       </td>
       <td className={styles.numeric}>{n(view?.opens ?? 0)}</td>
       <td className={styles.numeric}>{n(view?.clicks ?? 0)}</td>
-      <td className={styles.numeric}>{n(byClass?.genuine.clicks ?? 0)}</td>
+      <td className={styles.numeric}>{n(byClass?.confirmed.clicks ?? 0)}</td>
       <td className={styles.numeric}>{formatClickRate(view?.opens ?? 0, view?.clicks ?? 0)}</td>
       <td>
         <Link href={`/admin/setup/${encodeURIComponent(row.id)}`} className={styles.linkAction}>

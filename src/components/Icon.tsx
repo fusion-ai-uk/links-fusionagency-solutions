@@ -31,6 +31,12 @@ const PATHS: Record<string, string> = {
   guide: "M4 19.5V5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2M4 19.5A2 2 0 0 0 6 21h13",
   warning: "M12 3l10 18H2L12 3M12 10v4M12 18h.01",
   external: "M14 4h6v6M20 4l-9 9M19 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5",
+  // Timeline
+  chart: "M3 3v18h18M7 15v-4M12 15V7M17 15v-6",
+  calendar: "M4 6h16a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1M3 11h18M8 3v5M16 3v5",
+  send: "M22 2L11 13M22 2l-7 20-4-9-9-4 20-7",
+  flag: "M5 21V4M5 4h13l-2 4 2 4H5",
+  table: "M3 5h18v14H3V5M3 10h18M3 15h18M9 5v14M15 5v14",
 };
 
 export type IconName = keyof typeof PATHS;

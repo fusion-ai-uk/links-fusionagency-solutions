@@ -54,7 +54,7 @@ Approximate unique metrics in the dashboard use distinct combinations of `campai
 | `GET /o?cid={campaign_id}` | Open tracking pixel (returns 1×1 GIF) |
 | `GET /c/[linkId]?cid={campaign_id}` | Click tracking redirect |
 | `GET /health` | Health check — DB connectivity and whether the schema is current |
-| `GET /admin` | Admin dashboard, sectioned by programme |
+| `GET /admin` | Admin dashboard, sectioned by programme: headline figures, per-email timeline (opens/clicks by UK day or hour with the send moment and bursts marked), email table, confidence breakdown |
 | `GET /admin/setup/[campaignId]` | Per-email tracking setup + handover pack |
 | `GET /admin/guide` | How to read the figures — caveats and definitions |
 | `GET /admin/duplication` | Duplication analysis — scanner echoes, repeat clicks, evidence |
@@ -403,7 +403,7 @@ Test and pre-send are hidden from the dashboard figures by default (shown,
 labelled, with *Include test sends*). Historic sends with no `liveFrom` count
 everything as live, as before.
 
-Every **live click** then gets one **triage reason**, first match wins:
+Every **live click** then gets one **confidence label**, first match wins:
 
 | Reason | Rule |
 |--------|------|
@@ -411,12 +411,35 @@ Every **live click** then gets one **triage reason**, first match wins:
 | `internal` | Same device (hashed IP + user agent) had produced test or pre-send events in the scope — a tester looking at the live email |
 | `echo` | Near-simultaneous click on the same link from a different address |
 | `repeat` | Near-simultaneous click on the same link from the same address |
-| `genuine` | None of the above |
+| `confirmed` | None of the above — a recipient engaging |
 
-Phase and reason are computed, never stored (`src/lib/triage.ts`), so a
-corrected `liveFrom` re-triages history consistently. The dashboard shows the
-waterfall from raw to genuine; the CSV export carries `phase` and `triage`
+Phase and label are computed, never stored (`src/lib/confidence.ts`), so a
+corrected `liveFrom` re-assesses history consistently. The dashboard shows the
+waterfall from raw to confirmed; the CSV export carries `phase` and `confidence`
 per row and always includes the `-test` twin of each requested campaign.
+(Until September 2026 the label was called *triage* and the top class
+*genuine*; `include=genuine` in an old link still works.)
+
+### Send detection
+
+Nobody tells the app when an email goes out, so it watches for the moment
+itself (`src/lib/send-detection.ts`):
+
+- The first UK calendar day with **50 or more non-bot opens** on the live
+  campaign ID is the send day (`SEND_DETECTION_MIN_OPENS_PER_DAY`; a campaign
+  can lower it with `detectSendAtOpens`).
+- Within that day the send moment is the earliest open followed by a burst —
+  at least `max(3, threshold/10)` opens within 30 minutes.
+- The detected moment is used as `liveFrom` **only while the status is not yet
+  `sent`**. Recording the send in config takes over; where they differ, config
+  wins.
+- Later days at or above the threshold are reported as **bursts** (resend,
+  reminder, or a mail provider pre-fetching images) and flagged on the
+  timeline; they change nothing.
+
+The dashboard marks a detected send on the email row ("Send detected"), on the
+setup page (with the exact `liveFrom` value to paste into config), and on the
+timeline.
 
 ---
 
@@ -522,16 +545,22 @@ view can be bookmarked or sent to a colleague.
 - **Email picker** — all emails in the programme, or tick one or several to
   compare. Clicking an email's name in the table focuses on it; clicking again
   clears it.
-- **Signal chips** — Genuine, Echo, Repeat, Internal, Bot, Pre-send, Test. Each
+- **Signal chips** — Confirmed, Echo, Repeat, Internal, Bot, Pre-send, Test. Each
   chip shows how many clicks of that kind exist in the selection; switching a
   chip on or off changes every figure on the page. Presets: **All live**
-  (default), **Genuine only** (the figure to report), **Everything**.
+  (default), **Confirmed only** (the figure to report), **Everything**.
 - **Settings** — the echo window (5/10/30/60s).
 - **CSV** — administrators only; every event in the selection with `phase`
-  and `triage` columns, regardless of chips.
+  and `confidence` columns, regardless of chips.
+- **Timeline** — one email at a time (its own single-select dropdown, or the
+  email focused in the table): opens as bars on the left axis, clicks as a line
+  on the right axis, by UK day or by hour (the 72 hours around the send). The
+  dashed line is the send moment (recorded or detected); flags mark later
+  bursts. It follows the chips, so it shows exactly what the figures count.
+  URL parameter `timeline=<cid>`.
 
 URL parameters: `programme`, `campaign` (repeatable), `include` (comma list
-of classes; absent means all live), `window`, `q`, `status`. The older
+of classes; absent means all live), `window`, `timeline`, `q`, `status`. The older
 `bots=exclude`, `tests=include` and `collapse=1` still work and convert to
 `include` on the next navigation.
 
@@ -701,7 +730,9 @@ src/
     dashboard.ts            # Stats queries, collapse mode, CSV
     event-filters.ts        # Shared WHERE builders
     duplication.ts          # Click clustering, echo/repeat labelling
-    triage.ts               # Phase (test/pre-send/live) and reason per event
+    confidence.ts           # Phase (test/pre-send/live) and confidence label per event
+    send-detection.ts       # Finds the send moment from the first burst of opens
+    timeline.ts             # Per-email opens/clicks series by UK day and hour
     view.ts                 # Dashboard view model: signal classes and figures
     time.ts                 # UK-time formatting
     rate-limit.ts           # Sign-in throttling

@@ -5,7 +5,7 @@ import { UNKNOWN_CAMPAIGN } from "@/lib/tracking";
 export { buildEventWhere, type DashboardFilters } from "@/lib/event-filters";
 
 /**
- * Figures on the dashboard are computed from the triaged event set in
+ * Figures on the dashboard are computed from the assessed event set in
  * src/lib/view.ts, so every number follows the same classification. What is
  * left here is the campaign discovery query and the CSV helpers.
  */

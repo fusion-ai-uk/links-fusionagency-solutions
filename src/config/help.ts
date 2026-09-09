@@ -171,8 +171,8 @@ export const HELP = {
     short:
       "Every event is one of seven kinds. The chips decide which kinds are counted in every figure on the page — totals, per email, per link, the recent list — so the numbers always agree with the chips.",
     detail: [
-      "Genuine, Echo, Repeat, Internal and Bot are the five kinds of live event; Pre-send and Test are activity from before the send. The number on each chip is how many events of that kind exist in the current selection.",
-      "All live (the default) counts every live event, which matches what was reported before these controls existed. Genuine only is the figure to put in front of a client. Everything adds test and pre-send activity so a test can be checked.",
+      "Confirmed, Echo, Repeat, Internal and Bot are the five kinds of live event; Pre-send and Test are activity from before the send. The number on each chip is how many clicks of that kind exist in the current selection.",
+      "All live (the default) counts every live event, which matches what was reported before these controls existed. Confirmed only is the figure to put in front of a client. Everything adds test and pre-send activity so a test can be checked.",
       "Turning off Echo and Repeat is exactly what the old Collapse echoes toggle did. Turning off Bot is what Exclude likely bots did. The chips replace both, and can be combined freely.",
       "Changes apply as soon as a chip is clicked; the thin line along the top of the bar shows while the figures update. The address bar always reflects the current choice, so a view can be bookmarked or sent to a colleague.",
     ],
@@ -201,15 +201,42 @@ export const HELP = {
     ],
   },
 
-  triage: {
-    label: "Click triage",
+  confidence: {
+    label: "Click confidence",
     short:
-      "Every live click is given one reason — likely bot, likely internal, scanner echo, repeat, or genuine — applied in that order. Genuine is what remains.",
+      "How sure we are that a click was a recipient. Every live click gets one label — likely bot, likely internal, scanner echo, repeat, or confirmed — checked in that order. Confirmed means nothing counted against it.",
     detail: [
-      "Raw clicks are first split by phase: test, pre-send and live. Only live clicks go on to triage.",
-      "Bot — the user agent matched a known scanner, proxy or automation pattern. Internal — the device had produced test or pre-send events. Echo — a near-simultaneous click on the same link from a different address. Repeat — the same again from the same address. Genuine — none of the above.",
+      "Raw clicks are first split by phase: test, pre-send and live. Only live clicks are assessed.",
+      "Bot — the user agent matched a known scanner, proxy or automation pattern. Internal — the device had produced test or pre-send events. Echo — a near-simultaneous click on the same link from a different address. Repeat — the same again from the same address. Confirmed — none of the above.",
       "The order matters: a bot is a bot before it is anything else, and an echo is only looked for among clicks that have already passed the first two checks.",
-      "Nothing is stored. Phase and reason are recalculated from the rules and the campaign's live-from moment every time, so a correction re-triages history consistently. The CSV export carries both columns per row.",
+      "Most clicks are confirmed. The other labels exist so that the handful which are not can be shown and set aside, not to suggest the data is doubtful.",
+      "Nothing is stored. Phase and label are recalculated from the rules and the email's live-from moment every time, so a correction re-assesses history consistently. The CSV export carries both columns per row.",
+    ],
+  },
+
+  sendDetection: {
+    label: "Send detection",
+    short:
+      "Nobody tells the system when an email goes out, so it watches for the moment itself: the first UK day with 50 or more opens is the send day, and the start of that burst is the live-from moment. Recording the send in config confirms it.",
+    detail: [
+      "Before a send, the live campaign ID sees a trickle of opens from the build team. A send is unmistakable: dozens or hundreds of opens within an hour. The first UK calendar day with at least 50 non-bot opens is taken as the send day.",
+      "Within that day, the send moment is the earliest open followed by a burst — at least five more opens within half an hour. Anything on the live ID before that moment is pre-send; everything from it is live. This is what stops the build team's checks on the morning of the send being counted as recipients.",
+      "A detected send is used only while the email's status has not yet been moved to Sent. Once the send is recorded in config with its live-from moment, config takes over. Where the two differ, config wins.",
+      "Later days that clear the threshold again are marked on the timeline as bursts: a resend, a reminder, or a mail provider pre-fetching images for many inboxes at once. They are shown for interpretation, never acted on.",
+      "The threshold is 50 opens by default and can be lowered per email for a small audience.",
+    ],
+  },
+
+  timeline: {
+    label: "Timeline",
+    short:
+      "Opens and clicks for one email over time, by UK day or by hour. The dashed line marks the send; flags mark later bursts of opens. Follows the chips, so it shows exactly what the figures count.",
+    detail: [
+      "Bars are opens, read against the left axis. The line is clicks, read against the right axis — clicks are usually a small fraction of opens, so sharing one axis would flatten them to nothing.",
+      "By day shows the whole life of the email. By hour zooms to the three days around the send, where the shape of the send itself is visible: the moment it went out, the first hour's spike, and the tail.",
+      "The dashed line is the send moment, from config if recorded, otherwise as detected in the data (labelled Detected). A flag on a later day means that day also had 50 or more opens — see Send detection.",
+      "The timeline shows one email at a time on purpose. Overlaying emails hides the shape of each; pick the email from the dropdown, or click an email's name in the table.",
+      "Hover or tap a bar for the exact figures. The table view underneath gives the same numbers as text.",
     ],
   },
 
@@ -317,8 +344,10 @@ export const GUIDE_ORDER: HelpId[] = [
   "totalClicks",
   "approxUnique",
   "clicksPerOpen",
+  "timeline",
+  "sendDetection",
   "preSend",
-  "triage",
+  "confidence",
   "internal",
   "duplication",
   "echoClusters",

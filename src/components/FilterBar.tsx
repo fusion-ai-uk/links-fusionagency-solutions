@@ -31,6 +31,8 @@ type FilterBarProps = {
   classCounts: Record<EventClass, ClassCount>;
   windowSeconds: number;
   windowOptions: readonly number[];
+  /** The email shown on the timeline, carried through untouched. */
+  timeline?: string;
   /** List-only filters, carried through untouched. */
   q?: string;
   status?: string;
@@ -93,6 +95,7 @@ export default function FilterBar(props: FilterBarProps) {
     const include = serializeClasses(classes);
     if (include !== null) search.set("include", include);
     if (windowSeconds !== 10) search.set("window", String(windowSeconds));
+    if (props.timeline) search.set("timeline", props.timeline);
     if (props.q) search.set("q", props.q);
     if (props.status) search.set("status", props.status);
 
@@ -236,7 +239,7 @@ export default function FilterBar(props: FilterBarProps) {
           {(
             [
               ["live", "All live", "Every live event; nothing from before the send. The default."],
-              ["genuine", "Genuine only", "Only clicks and opens with nothing against them — the figure to report."],
+              ["confirmed", "Confirmed only", "Only clicks and opens with nothing against them — the figure to report."],
               ["everything", "Everything", "Every event recorded, including test and pre-send."],
             ] as [keyof typeof PRESETS, string, string][]
           ).map(([name, label, title]) => (
@@ -265,7 +268,7 @@ export default function FilterBar(props: FilterBarProps) {
             <Icon name="settings" /> <span>{props.windowSeconds}s</span>
           </button>
           {props.exportHref ? (
-            <a href={props.exportHref} className={styles.iconButton} title="Download every event in this view as CSV, with phase and triage columns">
+            <a href={props.exportHref} className={styles.iconButton} title="Download every event in this view as CSV, with phase and confidence columns">
               <Icon name="download" /> <span>CSV</span>
             </a>
           ) : (

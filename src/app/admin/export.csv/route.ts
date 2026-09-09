@@ -8,7 +8,7 @@ import {
 import { prisma } from "@/lib/prisma";
 import { buildEventWhere, CSV_HEADERS, eventToCsvRow, escapeCsvField } from "@/lib/dashboard";
 import { parseEchoWindow } from "@/lib/duplication";
-import { triageEvents } from "@/lib/triage";
+import { assessEvents } from "@/lib/confidence";
 import { baseCampaignId, getTestCampaignId } from "@/config/programmes";
 
 export const runtime = "nodejs";
@@ -19,8 +19,8 @@ export const runtime = "nodejs";
  *
  * `campaign` may be repeated so the export matches the dashboard's programme
  * scope. Omit it to export everything. Every row carries two computed
- * columns — `phase` (test / pre-send / live) and `triage` (bot / internal /
- * echo / repeat / genuine, live rows only) — so the file is analysis-ready.
+ * columns — `phase` (test / pre-send / live) and `confidence` (bot / internal /
+ * echo / repeat / confirmed, live rows only) — so the file is analysis-ready.
  * The export always contains every event; nothing is filtered by phase.
  */
 export async function GET(request: NextRequest) {
@@ -44,7 +44,7 @@ export async function GET(request: NextRequest) {
   const excludeBots = search.get("bots") === "exclude";
   const windowSeconds = parseEchoWindow(search.get("window") ?? undefined);
 
-  // Always include each campaign's test twin: triage needs it to learn which
+  // Always include each campaign's test twin: the assessment needs it to learn which
   // devices are testers, and the phase column keeps it distinguishable.
   const campaignIds =
     requested.length > 0
@@ -60,12 +60,12 @@ export async function GET(request: NextRequest) {
     orderBy: { createdAt: "desc" },
   });
 
-  const triage = triageEvents(events, windowSeconds);
+  const confidence = assessEvents(events, windowSeconds);
 
   const lines = [
-    [...CSV_HEADERS, "phase", "triage"].join(","),
+    [...CSV_HEADERS, "phase", "confidence"].join(","),
     ...events.map((event) => {
-      const t = triage.byId.get(event.id);
+      const t = confidence.byId.get(event.id);
       return [
         eventToCsvRow(event),
         escapeCsvField(t?.phase ?? ""),
