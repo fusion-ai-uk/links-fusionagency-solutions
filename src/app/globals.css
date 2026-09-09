@@ -1,11 +1,54 @@
+/**
+ * Fusion Brand Comms design tokens.
+ * Values from Fusion_BrandComms_Deck_Kit_v3 — see docs/brand.md.
+ * Do not substitute pure white for --text-primary; the deck is explicit.
+ */
 :root {
-  --background: #f8fafc;
-  --foreground: #0f172a;
-  --surface: #ffffff;
-  --border: #e2e8f0;
-  --muted: #64748b;
-  --accent: #2563eb;
-  --accent-hover: #1d4ed8;
+  /* Surfaces, darkest to lightest */
+  --surface-inset: #0a101c;
+  --surface-well: #0e1524;
+  --surface-bg: #121a2b;
+  --surface-subtle: #1a2438;
+  --surface-card: #1b2740;
+  --surface-raised: #23304a;
+  --border-soft: #27334d;
+  --border: #31405e;
+
+  /* Text tiers */
+  --text-primary: #e8eef5;
+  --text-secondary: #c7d0dc;
+  --text-tertiary: #8a97a8;
+  --text-quaternary: #5a6572;
+  --text-divider: #9aa7b8;
+  --alert: #e5484d;
+
+  /* Accent rotation — order matters: orange, cyan, teal, violet */
+  --accent-orange: #f97316;
+  --accent-cyan: #22d3ee;
+  --accent-teal: #2dd4bf;
+  --accent-violet: #a78bfa;
+
+  --accent-1: var(--accent-orange);
+  --accent-2: var(--accent-cyan);
+  --accent-3: var(--accent-teal);
+  --accent-4: var(--accent-violet);
+
+  /* Semantic roles, per the deck */
+  --positive: var(--accent-teal);
+  --caution: var(--accent-orange);
+  --negative: var(--alert);
+  /* [web] Cyan carries interactive text — orange is reserved for caution. */
+  --interactive: var(--accent-cyan);
+
+  /* The accent bar is the signature of the system: 0.075in ~= 5.4pt */
+  --accent-bar: 3px;
+
+  --font-sans:
+    var(--font-jost), "Century Gothic", "Questrial", "Futura", system-ui,
+    -apple-system, "Segoe UI", sans-serif;
+  --font-mono:
+    var(--font-jetbrains-mono), Consolas, ui-monospace, SFMono-Regular, Menlo,
+    monospace;
 }
 
 * {
@@ -20,46 +63,108 @@ body {
 }
 
 body {
-  font-family:
-    system-ui,
-    -apple-system,
-    BlinkMacSystemFont,
-    "Segoe UI",
-    Roboto,
-    sans-serif;
-  background: var(--background);
-  color: var(--foreground);
-  line-height: 1.5;
+  font-family: var(--font-sans);
+  background: var(--surface-bg);
+  color: var(--text-secondary);
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  color: var(--text-primary);
+  /* Titles are regular weight, not bold. Bold is for row heads and numerals. */
+  font-weight: 400;
+  letter-spacing: 0;
 }
 
 a {
-  color: var(--accent);
+  color: var(--interactive);
+  text-decoration-color: color-mix(in srgb, var(--interactive) 45%, transparent);
+  text-underline-offset: 0.2em;
 }
 
 a:hover {
-  color: var(--accent-hover);
+  color: var(--text-primary);
+}
+
+:focus-visible {
+  outline: 2px solid var(--interactive);
+  outline-offset: 2px;
 }
 
 code {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 0.875em;
-  background: #f1f5f9;
-  padding: 0.15em 0.35em;
-  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+  background: var(--surface-raised);
+  color: var(--text-secondary);
+  padding: 0.1em 0.35em;
+  /* Square corners — the content system has no rounded cards. */
+  border-radius: 0;
 }
 
 pre {
   overflow-x: auto;
   padding: 1rem;
-  background: #0f172a;
-  color: #e2e8f0;
-  border-radius: 8px;
-  font-size: 0.85rem;
-  line-height: 1.6;
+  background: var(--surface-well);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-soft);
+  border-radius: 0;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  line-height: 1.65;
 }
 
 pre code {
   background: none;
   padding: 0;
   color: inherit;
+  font-size: inherit;
+}
+
+/* ---------------------------------------------------------------------------
+   Shared brand furniture
+   --------------------------------------------------------------------------- */
+
+/* Eyebrow: orange em-dash, then the label in tertiary, uppercase, tracked. */
+.eyebrow {
+  display: block;
+  margin: 0 0 0.6rem;
+  font-size: 0.72rem;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+.eyebrow::before {
+  content: "—   ";
+  color: var(--accent-orange);
+  white-space: pre;
+}
+
+/* Mono annotation line. Never body copy, never a title. */
+.annotation {
+  margin: 0.5rem 0 0;
+  font-family: var(--font-mono);
+  font-size: 0.76rem;
+  line-height: 1.6;
+  color: var(--accent-orange);
+}
+
+/* Source line: names the data, the owner, and any assumption. */
+.sourceLine {
+  margin: 0.4rem 0 0;
+  font-size: 0.72rem;
+  line-height: 1.5;
+  color: var(--text-quaternary);
+}
+
+.hairline {
+  height: 1px;
+  border: 0;
+  margin: 1.5rem 0;
+  background: var(--surface-subtle);
 }

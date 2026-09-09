@@ -1,0 +1,58 @@
+.trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.05rem;
+  height: 1.05rem;
+  margin-left: 0.35rem;
+  padding: 0;
+  vertical-align: middle;
+  /* A pill — the one shape the system allows to be round. */
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-raised);
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  font-weight: 700;
+  line-height: 1;
+  cursor: help;
+  flex: 0 0 auto;
+}
+
+.trigger:hover,
+.trigger[aria-expanded="true"] {
+  border-color: var(--accent-cyan);
+  color: var(--accent-cyan);
+}
+
+.tooltip {
+  position: fixed;
+  z-index: 60;
+  display: block;
+  padding: 0.7rem 0.8rem;
+  background: var(--surface-well);
+  /* Wells take a 1pt border in border-soft. */
+  border: 1px solid var(--border-soft);
+  /* Accent bar on top — the signature of the system. */
+  border-top: var(--accent-bar) solid var(--accent-cyan);
+  color: var(--text-secondary);
+  font-family: var(--font-sans);
+  font-size: 0.78rem;
+  font-weight: 400;
+  line-height: 1.55;
+  text-transform: none;
+  letter-spacing: 0;
+  text-align: left;
+  pointer-events: none;
+}
+
+.tooltipLabel {
+  display: block;
+  margin-bottom: 0.25rem;
+  color: var(--text-primary);
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}

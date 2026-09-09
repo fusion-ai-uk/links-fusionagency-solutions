@@ -1,6 +1,16 @@
 # Email Link Tracking — Fusion Agency Solutions
 
-Private **campaign-level** email open and click tracking for IMI marketing emails.
+Private **campaign-level** email open and click tracking for client email
+programmes.
+
+Work is organised in two levels:
+
+- **Programme** — a client + brand (e.g. Gilead AmBisome), defined in
+  `src/config/programmes.ts`
+- **Campaign** — one email / wave, identified by the `cid` in its tracking URLs
+
+The admin dashboard is sectioned by programme, and each campaign has its own
+setup and handover page at `/admin/setup/<campaign-id>`.
 
 **Production domain:** [https://links-record.vercel.app](https://links-record.vercel.app)
 
@@ -10,7 +20,12 @@ This service logs estimated email opens via a 1×1 tracking pixel and CTA clicks
 
 ## Campaign-level tracking limitation
 
-Because IMI is **not** providing recipient IDs or merge tags, this system tracks **campaign-level opens and clicks only**.
+Because the sending platforms are **not** providing recipient IDs or merge tags,
+this system tracks **campaign-level opens and clicks only**.
+
+> This has been confirmed for the IMI waves. For any new programme, confirm with
+> the sending platform whether recipient IDs are available before assuming
+> campaign-level only.
 
 **We can track:**
 
@@ -39,9 +54,11 @@ Approximate unique metrics in the dashboard use distinct combinations of `campai
 | `GET /o?cid={campaign_id}` | Open tracking pixel (returns 1×1 GIF) |
 | `GET /c/[linkId]?cid={campaign_id}` | Click tracking redirect |
 | `GET /health` | Health check (includes DB connectivity) |
-| `GET /admin` | Admin dashboard |
-| `GET /admin/export.csv` | CSV export of all events |
-| `GET /examples` | Email HTML snippet reference |
+| `GET /admin` | Admin dashboard, sectioned by programme |
+| `GET /admin/setup/[campaignId]` | Per-email tracking setup + handover pack |
+| `GET /admin/guide` | How to read the figures — caveats and definitions |
+| `GET /admin/export.csv` | CSV export (scoped to the current dashboard view) |
+| `GET /examples` | Generic email HTML snippet reference (public) |
 
 ---
 
@@ -82,12 +99,13 @@ cp .env.example .env
 | `DATABASE_POSTGRES_PRISMA_URL` | Yes (Vercel) | Prisma pooled connection — set automatically by Vercel Neon/Postgres |
 | `DATABASE_URL_UNPOOLED` | Yes (Vercel) | Direct connection for migrations — set automatically by Vercel Neon/Postgres |
 | `DATABASE_URL` | Vercel sets this too | Present on Vercel but Prisma uses the two vars above |
-| `ADMIN_PASSWORD` | Yes | Password for `/admin` login |
+| `ADMIN_PASSWORD` | Yes | Password for michael@fusionagency.solutions |
+| `STEVEN_PASSWORD` | For Steven | Password for steven@fusionagency.solutions |
 | `IP_HASH_SECRET` | Yes | Secret for HMAC-hashing client IPs (e.g. `openssl rand -hex 32`) |
 
 Locally, set `DATABASE_POSTGRES_PRISMA_URL` and `DATABASE_URL_UNPOOLED` to the same Postgres URL (or use `vercel env pull .env.local`).
 
-No IMI-related environment variables are required.
+No client- or platform-specific environment variables are required.
 
 ### 3. Database setup
 
@@ -123,7 +141,8 @@ You must add these manually in **Vercel → Settings → Environment Variables**
 
 | Variable | Notes |
 |----------|-------|
-| `ADMIN_PASSWORD` | Strong password for dashboard access |
+| `ADMIN_PASSWORD` | Michael's dashboard password |
+| `STEVEN_PASSWORD` | Steven's dashboard password |
 | `IP_HASH_SECRET` | Random 32+ byte hex string; **must stay stable** or historical IP hashes become incomparable |
 
 After adding storage or env vars, **redeploy** so serverless functions receive them. The build runs `prisma migrate deploy` to create tables automatically.
@@ -162,7 +181,7 @@ The tracking service is served at the Vercel production URL:
 
 **https://links-record.vercel.app**
 
-Use this base URL in all email HTML snippets and IMI handover docs. Routes are unchanged: `/o`, `/c/[linkId]`, `/admin`, `/health`.
+Use this base URL in all email HTML snippets and handover packs. Routes are unchanged: `/o`, `/c/[linkId]`, `/admin`, `/health`.
 
 ### Verification after deploy
 
@@ -181,19 +200,33 @@ Edit `src/config/links.ts` and add/update entries under `campaignLinkDestination
 
 ```typescript
 export const campaignLinkDestinations = {
-  "imi-aids2026-pre-email-jun-2026": {
-    "read-more": "https://hosted.bmj.com/gilead-aids2026",
-    "learn-more": "https://hosted.bmj.com/gilead-aids2026",
+  "gilead-ambisome-email-1": {
+    "read-more": "https://example.com/landing-page",
+    "watch-video": "https://example.com/landing-page#video",
   },
 };
 ```
 
-- **Campaign ID** (`cid`) identifies the wave in reporting
+- **Campaign ID** (`cid`) identifies the email in reporting
 - **Key** = link ID used in URLs: `/c/LINK_ID?cid=CAMPAIGN_ID`
 - **Value** = final destination URL
 - Commit and redeploy after changes
 
-**Security:** Destination URLs are **never** taken from query strings. Unknown link IDs return 404. This prevents open-redirect abuse.
+### How a click is resolved
+
+1. The campaign's own map (a `-test` ID uses its parent campaign's map).
+2. If the campaign is configured at all, **stop** — an unknown link ID returns
+   404.
+3. Only for campaign IDs the app does not recognise, fall back to the legacy
+   aliases in `defaultLinkDestinations`.
+
+Step 2 matters: a missing link ID on a known campaign is a config error, and a
+404 is far safer than silently sending a recipient to a **different brand's**
+content. The legacy aliases in step 3 exist only for link IDs that may already be
+live in mail sent before per-campaign maps existed.
+
+**Security:** Destination URLs are **never** taken from query strings. Unknown
+link IDs return 404. This prevents open-redirect abuse.
 
 ---
 
@@ -204,82 +237,154 @@ export const campaignLinkDestinations = {
 - Use `/c/LINK_ID?cid=CAMPAIGN_ID` for tracked links
 - Do not change unsubscribe links
 - Do not change preference centre links
-- Do not change legal or compliance links
-- Do not add raw email addresses to URLs
-- **No IMI merge tags are needed**
+- Do not change legal, compliance or adverse-event reporting links
+- Do not add raw email addresses or recipient data to URLs
+- **No merge tags are needed**
 
-See also [/examples](https://links-record.vercel.app/examples) when deployed.
+The exact URLs for a given email are generated at `/admin/setup/<campaign-id>`.
+See also [/examples](https://links-record.vercel.app/examples) for the generic
+patterns.
 
 ---
 
-## Steve handover: AIDS 2026 pre-email
+## Accounts and access
 
-Use this campaign ID for the pre-email wave:
+Sign-in is by named account, not a shared password. The registry lives in
+`src/config/users.ts`; each user names an environment variable that holds their
+password, so no password is ever committed.
 
-- `imi-aids2026-pre-email-jun-2026`
+| Email | Name | Role | Password variable |
+|-------|------|------|-------------------|
+| michael@fusionagency.solutions | Michael | `admin` | `ADMIN_PASSWORD` |
+| steven@fusionagency.solutions | Steven | `build` | `STEVEN_PASSWORD` |
 
-Tracked URLs for this wave:
+### What the roles can do
 
-- Open pixel:
-  - `https://links-record.vercel.app/o?cid=imi-aids2026-pre-email-jun-2026`
-- CTA links:
-  - `https://links-record.vercel.app/c/read-more?cid=imi-aids2026-pre-email-jun-2026`
-  - `https://links-record.vercel.app/c/learn-more?cid=imi-aids2026-pre-email-jun-2026`
+| | `admin` | `build` |
+|---|---|---|
+| Dashboard, all programmes and figures | Yes | Yes |
+| Per-email setup and handover packs | Yes | Yes |
+| Guide page | Yes | Yes |
+| Run test sends | Yes | Yes |
+| CSV export of individual events | Yes | **No** |
+| `/admin/debug/recent-events` | Yes | **No** |
 
-What Steve should change in the supplied HTML:
+The CSV export and debug endpoint are held back from `build` because they carry
+hashed IP addresses and full user agent strings. To give Steven them, change his
+`role` to `"admin"` in `src/config/users.ts` and redeploy — nothing else.
 
-1. Replace each `href="https://hosted.bmj.com/gilead-aids2026"` CTA with one of:
-   - `.../c/read-more?cid=imi-aids2026-pre-email-jun-2026`
-   - `.../c/learn-more?cid=imi-aids2026-pre-email-jun-2026`
-2. Add this tracking pixel once near the bottom, before `</body>`:
+### Adding or removing someone
 
-```html
-<img src="https://links-record.vercel.app/o?cid=imi-aids2026-pre-email-jun-2026" width="1" height="1" alt="" style="width:1px;height:1px;border:0;display:block;" />
+1. Add an entry to `USERS` in `src/config/users.ts` with a new
+   `passwordEnv` name.
+2. Set that variable in Vercel → Settings → Environment Variables.
+3. Redeploy.
+
+To remove access, delete the environment variable and redeploy. That user can no
+longer sign in and any existing session of theirs stops working immediately.
+
+### How sessions work
+
+The session cookie is the user's email plus an HMAC of it keyed on their own
+password. Consequences worth knowing:
+
+- Changing a password signs that user out everywhere, and only that user.
+- Clearing a password variable revokes that account immediately.
+- The cookie cannot be edited to impersonate someone else — the signature is
+  keyed on the other account's password, which the cookie holder does not have.
+- Sessions last 7 days. Cookies are `httpOnly`, `sameSite=lax`, and `secure`
+  in production.
+
+**Known limitation:** there is no rate limiting on sign-in attempts. Passwords
+should therefore be strong enough that online guessing is impractical — a
+three-word passphrase plus digits is roughly 35 bits, which is about 54 years at
+ten attempts a second. Do not reduce them to a single word.
+
+---
+
+## Programmes and campaign IDs
+
+Programmes and their campaigns are defined in `src/config/programmes.ts`.
+Each campaign carries a status so the dashboard shows where it is in approval:
+
+| Status | Meaning |
+|--------|---------|
+| `planned` | Slot reserved. Content/HTML not received — nothing to configure yet |
+| `in-review` | Content received, still in client / medical / legal review |
+| `ready` | Tracking configured and handed to the email build. Not sent |
+| `sent` | Sent — collecting live data |
+| `closed` | Send finished and reporting signed off |
+
+### Gilead AmBisome
+
+Five-email programme sent via IMI. As with the other IMI waves, no recipient IDs
+or merge tags are provided, so tracking is **campaign-level only**.
+
+Campaign IDs are reserved and the dashboard section is live, but **link IDs and
+destination URLs are deliberately empty** until each approved HTML lands.
+
+| Campaign ID (`cid`) | Email | Status | Send date |
+|---------------------|-------|--------|-----------|
+| `gilead-ambisome-email-1` | AmBisome Email 1 | planned | TBC |
+| `gilead-ambisome-email-2` | AmBisome Email 2 | planned | TBC |
+| `gilead-ambisome-email-3` | AmBisome Email 3 | planned | TBC |
+| `gilead-ambisome-email-4` | AmBisome Email 4 | planned | TBC |
+| `gilead-ambisome-email-5` | AmBisome Email 5 | planned | TBC |
+
+Open tracking for these works the moment the pixel is in the HTML — no config
+needed. Click tracking needs each CTA allowlisting first.
+
+### IMI — Gilead AIDS 2026
+
+| Campaign ID (`cid`) | Email | Status |
+|---------------------|-------|--------|
+| `imi-aids2026-pre-email-jun-2026` | Pre-email | sent |
+| `imi-aids2026-post-congress-jul-2026` | Post-congress | sent |
+| `imi-aids2026-wave-3` | Wave 3 | planned (no link IDs yet) |
+
+### IMI — Gilead Lyvdelzi
+
+| Campaign ID (`cid`) | Email | Status |
+|---------------------|-------|--------|
+| `imi-lyvdelzi-may-2026` | Lyvdelzi May 2026 | sent |
+
+---
+
+## Handover process for a new email
+
+Run this once per email, ahead of its transmission date.
+
+1. **Approved HTML arrives.** Identify every CTA that needs click tracking and
+   its final destination URL.
+2. **Choose a link ID per CTA** — short, lower-case, hyphenated, and descriptive
+   of the CTA (e.g. `watch-the-symposium`). Keep them stable once sent.
+3. **Add the destinations** to `src/config/links.ts` under that campaign's
+   `cid`, then commit and redeploy.
+4. **Update the campaign status** in `src/config/programmes.ts`
+   (`planned` → `in-review` → `ready`), and set `sendDate` when known.
+5. **Open `/admin/setup/<campaign-id>`.** It generates the pixel tag, every
+   tracked CTA URL, and a copy-ready handover block. Send that to the email
+   build.
+6. **Test before send** using the `-test` campaign ID (see below), then confirm
+   the events appear on the setup page's readiness checklist.
+7. **Flip the status to `sent`** once the email goes out.
+
+The setup page's readiness checklist shows which of these steps are outstanding.
+
+---
+
+## Test sends
+
+Any campaign ID with `-test` appended resolves to the same allowlisted
+destinations as its parent, but records events under the test ID:
+
+```
+https://links-record.vercel.app/o?cid=gilead-ambisome-email-1-test
+https://links-record.vercel.app/c/read-more?cid=gilead-ambisome-email-1-test
 ```
 
-3. Do **not** alter unsubscribe / preference centre / legal links.
-
-Wave placeholders already configured for filtering/setup:
-
-- `imi-aids2026-wave-2`
-- `imi-aids2026-wave-3`
-
-Populate their link IDs in `src/config/links.ts` when those two HTMLs are ready.
-
----
-
-## Steve handover: AIDS 2026 post-congress
-
-Use this campaign ID for the post-congress wave:
-
-- `imi-aids2026-post-congress-jul-2026`
-
-Tracked URLs for this wave:
-
-- Open pixel:
-  - `https://links-record.vercel.app/o?cid=imi-aids2026-post-congress-jul-2026`
-- CTA links:
-  - `https://links-record.vercel.app/c/watch-the-symposium?cid=imi-aids2026-post-congress-jul-2026`
-  - `https://links-record.vercel.app/c/featured-symposium-video?cid=imi-aids2026-post-congress-jul-2026`
-  - `https://links-record.vercel.app/c/explore-the-talks?cid=imi-aids2026-post-congress-jul-2026`
-  - `https://links-record.vercel.app/c/explore-aids2026-highlights?cid=imi-aids2026-post-congress-jul-2026`
-
-What Steve should change in the supplied HTML:
-
-1. Replace each `href="https://hosted.bmj.com/gilead-aids2026"` CTA with:
-   - `watch_the_symposium.png` button -> `.../c/watch-the-symposium?cid=imi-aids2026-post-congress-jul-2026`
-   - `video_thumbnail.png` image -> `.../c/featured-symposium-video?cid=imi-aids2026-post-congress-jul-2026`
-   - `explore_the_talks.png` button -> `.../c/explore-the-talks?cid=imi-aids2026-post-congress-jul-2026`
-   - `explore_gilead_aids2026_highlights_30.png` button -> `.../c/explore-aids2026-highlights?cid=imi-aids2026-post-congress-jul-2026`
-2. Add this tracking pixel once near the bottom, before `</body>`:
-
-```html
-<img src="https://links-record.vercel.app/o?cid=imi-aids2026-post-congress-jul-2026" width="1" height="1" alt="" style="width:1px;height:1px;border:0;display:block;" />
-```
-
-3. Do **not** alter unsubscribe / preference centre / legal links.
-
----
+Test data is **hidden from the dashboard** unless *Include test sends* is ticked,
+so live reporting stays clean. No config is needed to enable a test ID.
 
 ## Email HTML snippets
 
@@ -295,12 +400,14 @@ What Steve should change in the supplied HTML:
 <a href="https://links-record.vercel.app/c/LINK_ID?cid=CAMPAIGN_ID">CTA text</a>
 ```
 
-### Real example
+### Test variant
+
+Append `-test` to the campaign ID in a test build:
 
 ```html
-<img src="https://links-record.vercel.app/o?cid=imi-lyvdelzi-may-2026" width="1" height="1" alt="" style="width:1px;height:1px;border:0;display:block;" />
+<img src="https://links-record.vercel.app/o?cid=CAMPAIGN_ID-test" width="1" height="1" alt="" style="width:1px;height:1px;border:0;display:block;" />
 
-<a href="https://links-record.vercel.app/c/see-recap?cid=imi-lyvdelzi-may-2026">See the recap</a>
+<a href="https://links-record.vercel.app/c/LINK_ID?cid=CAMPAIGN_ID-test">CTA text</a>
 ```
 
 ---
@@ -356,6 +463,15 @@ curl http://localhost:3000/health
 1. Set `ADMIN_PASSWORD` in `.env`.
 2. Visit [http://localhost:3000/admin](http://localhost:3000/admin).
 3. Export: [http://localhost:3000/admin/export.csv](http://localhost:3000/admin/export.csv) (requires login cookie).
+
+The dashboard has two filters that also apply to the CSV export:
+
+- **Exclude likely bots** — drops rows flagged by the user-agent heuristic.
+  Off by default, so headline figures match what was reported historically.
+- **Include test sends** — adds `-test` campaign IDs. Off by default.
+
+`export.csv` accepts a repeated `campaign` parameter plus `bots=exclude`, so the
+download always matches what is on screen.
 
 ---
 
@@ -425,14 +541,17 @@ src/
     o/route.ts              # Open pixel
     c/[linkId]/route.ts     # Click redirect
     health/route.ts         # Health check
-    admin/                  # Dashboard + CSV export
-    examples/page.tsx       # HTML snippets
+    admin/                  # Dashboard, per-email setup pages, CSV export
+    examples/page.tsx       # Generic HTML snippets (public)
   config/
+    programmes.ts           # Programme + campaign registry, statuses
     links.ts                # Allowlisted click destinations
   lib/
     tracking.ts             # Event logging
     auth.ts                 # Admin session
     dashboard.ts            # Stats queries
+    programme-view.ts       # Programme scoping + wave table view model
+    tracking-urls.ts        # Pixel / CTA URL and handover-pack builders
     ip-hash.ts              # IP hashing
     geo.ts                  # Vercel geo headers
     bot-detect.ts           # Bot UA detection
@@ -440,6 +559,31 @@ prisma/
   schema.prisma
   migrations/
 ```
+
+---
+
+## Brand
+
+The interface follows `Fusion_BrandComms_Deck_Kit_v3` — the dark navy surface
+ladder, the four-accent rotation, square corners, and the accent bar as the
+component signature. The palette, type scale and component rules are documented
+in [docs/brand.md](docs/brand.md), including the two places where a deck
+standard needed extending for a web interface.
+
+Two of the deck's honesty conventions are load-bearing here:
+
+- **Every figure carries a source line.** A number with no source line is not
+  finished.
+- **Estimates say so where they appear**, not only in a footnote.
+
+The typefaces are Jost and JetBrains Mono, standing in for the deck's Century
+Gothic and Consolas, which are not web fonts. These are the same substitutes
+used to typeset the deck kit itself.
+
+The cover calls for the `fusion_logo.png` asset, which is not in this repo, so
+the sign-in screen sets the wordmark as type. To use the real logo, add it at
+`public/fusion-logo.png` and swap the wordmark for a `next/image` tag — the
+comment in `src/app/admin/login/page.tsx` says how.
 
 ---
 

@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { isAdminAuthenticatedFromRequest, unauthorizedResponse } from "@/lib/auth";
+import {
+  forbiddenResponse,
+  getUserFromRequest,
+  requestHasCapability,
+  unauthorizedResponse,
+} from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
@@ -13,8 +18,14 @@ export const dynamic = "force-dynamic";
  * are actually being written to the database.
  */
 export async function GET(request: NextRequest) {
-  if (!isAdminAuthenticatedFromRequest(request)) {
+  if (!getUserFromRequest(request)) {
     return unauthorizedResponse();
+  }
+
+  if (!requestHasCapability(request, "viewDebugEndpoint")) {
+    return forbiddenResponse(
+      "The debug endpoint is limited to administrator accounts."
+    );
   }
 
   try {

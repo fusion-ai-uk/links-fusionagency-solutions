@@ -5,16 +5,25 @@ import { redirect } from "next/navigation";
 import {
   ADMIN_SESSION_COOKIE,
   getSessionCookieValue,
-  verifyPassword,
+  verifyCredentials,
 } from "@/lib/auth";
 
 export async function loginAction(formData: FormData) {
+  const email = formData.get("email");
   const password = formData.get("password");
-  if (typeof password !== "string" || !verifyPassword(password)) {
+
+  if (typeof email !== "string" || typeof password !== "string") {
     redirect("/admin/login?error=1");
   }
 
-  const token = getSessionCookieValue();
+  const user = verifyCredentials(email, password);
+  if (!user) {
+    // Deliberately the same message for an unknown address and a wrong
+    // password, so the form does not confirm who has an account.
+    redirect("/admin/login?error=1");
+  }
+
+  const token = getSessionCookieValue(user);
   if (!token) {
     redirect("/admin/login?error=config");
   }
