@@ -9,10 +9,7 @@ import {
   type CampaignMetrics,
   type DashboardStats,
 } from "@/lib/dashboard";
-import {
-  ECHO_WINDOW_OPTIONS,
-  parseEchoWindow,
-} from "@/lib/duplication";
+import { ECHO_WINDOW_OPTIONS, parseEchoWindow } from "@/lib/duplication";
 import { CLIENT_KIND_LABELS } from "@/lib/request-hints";
 import { BOT_REASON_LABELS } from "@/lib/bot-detect";
 import { formatUkTime, UK_TIME_LABEL } from "@/lib/time";
@@ -41,6 +38,7 @@ import {
 } from "@/lib/programme-view";
 import { SOURCE_LINE } from "@/config/help";
 import InfoTip from "@/components/InfoTip";
+import Collapsible from "@/components/Collapsible";
 import { logoutAction } from "./actions";
 import styles from "./admin.module.css";
 
@@ -117,6 +115,8 @@ function duplicationHref(params: SearchParams): string {
   return query ? `/admin/duplication?${query}` : "/admin/duplication";
 }
 
+const n = (value: number) => value.toLocaleString("en-GB");
+
 export default async function AdminDashboardPage({ searchParams }: PageProps) {
   const user = await getCurrentUser();
   if (!user) {
@@ -153,61 +153,50 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
 
     const options = { collapseEchoes, echoWindowSeconds };
 
-    [stats, programmeMetrics, testMetrics, triage] =
-      await Promise.all([
-        getDashboardStats(
-          {
-            campaignIds: scope.filterCampaignIds,
-            excludeBots,
-            liveWindows: scope.liveWindows,
-          },
-          options
-        ),
-        getCampaignMetrics(
-          {
-            campaignIds: scope.programmeCampaignIds,
-            excludeBots,
-            liveWindows: scope.liveWindows,
-          },
-          options
-        ),
-        getCampaignMetrics({
-          campaignIds: scope.programmeCampaignIds.map(getTestCampaignId),
+    [stats, programmeMetrics, testMetrics, triage] = await Promise.all([
+      getDashboardStats(
+        {
+          campaignIds: scope.filterCampaignIds,
           excludeBots,
-        }),
-        loadTriage(
-          scope.selectedCampaignId
-            ? [scope.selectedCampaignId]
-            : scope.programmeCampaignIds,
-          echoWindowSeconds
-        ),
-      ]);
+          liveWindows: scope.liveWindows,
+        },
+        options
+      ),
+      getCampaignMetrics(
+        {
+          campaignIds: scope.programmeCampaignIds,
+          excludeBots,
+          liveWindows: scope.liveWindows,
+        },
+        options
+      ),
+      getCampaignMetrics({
+        campaignIds: scope.programmeCampaignIds.map(getTestCampaignId),
+        excludeBots,
+      }),
+      loadTriage(
+        scope.selectedCampaignId
+          ? [scope.selectedCampaignId]
+          : scope.programmeCampaignIds,
+        echoWindowSeconds
+      ),
+    ]);
   } catch (error) {
     dbError = error instanceof Error ? error.message : String(error);
     console.error("[admin] dashboard query failed:", error);
   }
 
   const header = (
-    <header className={styles.header}>
+    <header className={styles.header} style={{ marginBottom: "1.1rem", paddingBottom: "0.9rem" }}>
       <div>
-        <span className={styles.eyebrowLocal}>
-          Fusion Data &amp; AI · Email tracking
-        </span>
+        <span className={styles.eyebrowLocal}>Fusion Data &amp; AI · Email tracking</span>
         <h1>Campaign tracking repository</h1>
-        <p className={styles.subtitle}>
-          Every tracked email, grouped by client programme. Open and click
-          activity is recorded at campaign level — there are no recipient
-          identifiers in this system.
-        </p>
       </div>
       <div className={styles.headerActions}>
         <span className={styles.userChip}>
           <span className={styles.userChipName}>{user.name}</span>
           <span className={styles.userChipRole}>{ROLE_LABELS[user.role]}</span>
         </span>
-        <Link href={duplicationHref(params)} className={styles.buttonSecondary}>
-          Duplication
-        </Link>
         <Link href="/admin/guide" className={styles.buttonSecondary}>
           How to read this
         </Link>
@@ -268,6 +257,7 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
   const exportSearch = new URLSearchParams();
   for (const id of scope.filterCampaignIds) exportSearch.append("campaign", id);
   if (excludeBots) exportSearch.set("bots", "exclude");
+  if (params.window) exportSearch.set("window", params.window);
   const exportHref = `/admin/export.csv?${exportSearch.toString()}`;
   const mayExport = can(user.role, "exportCsv");
 
@@ -283,96 +273,69 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
 
   const awaitingSetup = allRows.filter((row) => !row.hasTrackedLinks).length;
   const hasAnyEvents = stats.totalOpens > 0 || stats.totalClicks > 0;
-  // Test sends are hidden by default; say so when there is something to see.
   const hiddenTestEvents = includeTests
     ? 0
     : testMetrics.reduce((sum, m) => sum + m.opens + m.clicks, 0);
-  // Pre-send comes from the triage pass — the same numbers the waterfall shows.
   const hiddenPreSendEvents =
     includeTests || !triage ? 0 : triage.clicks.preSend + triage.opens.preSend;
   const detectedEchoes = stats.echoEventIds.size;
   const detectedRepeats = stats.repeatEventIds.size;
 
-  // A plain-words summary of what is currently on screen.
   const summaryParts = [
     scopeLabel,
     selectedRow ? selectedRow.label : `all ${allRows.length} emails`,
     excludeBots ? "likely bots excluded" : "bots included",
     includeTests ? "test sends included" : "test sends hidden",
-    collapseEchoes
-      ? `echoes within ${echoWindowSeconds}s collapsed`
-      : "every click counted",
+    collapseEchoes ? `echoes within ${echoWindowSeconds}s collapsed` : "every click counted",
   ];
-  if (query) summaryParts.push(`list filtered by "${query}"`);
-  if (statusFilter)
-    summaryParts.push(`status ${CAMPAIGN_STATUS_LABELS[statusFilter]}`);
 
-  const clicksHint = collapseEchoes && stats.collapse
-    ? `${stats.collapse.echoEvents} echo${stats.collapse.echoEvents === 1 ? "" : "es"} and ${stats.collapse.repeatEvents} repeat${stats.collapse.repeatEvents === 1 ? "" : "s"} collapsed.`
-    : detectedEchoes + detectedRepeats > 0
-      ? `${detectedEchoes} likely echo${detectedEchoes === 1 ? "" : "es"}, ${detectedRepeats} repeat${detectedRepeats === 1 ? "" : "s"} detected — not collapsed.`
-      : "Tracked links followed. Clicks, not clickers.";
+  const clicksHint =
+    collapseEchoes && stats.collapse
+      ? `${stats.collapse.echoEvents} echo${stats.collapse.echoEvents === 1 ? "" : "es"}, ${stats.collapse.repeatEvents} repeat${stats.collapse.repeatEvents === 1 ? "" : "s"} collapsed.`
+      : detectedEchoes + detectedRepeats > 0
+        ? `${detectedEchoes} likely echo${detectedEchoes === 1 ? "" : "es"}, ${detectedRepeats} repeat${detectedRepeats === 1 ? "" : "s"} — not collapsed.`
+        : "Clicks, not clickers.";
+
+  const programmeIndex = scope.programme
+    ? PROGRAMMES.findIndex((p) => p.id === scope!.programme!.id)
+    : -1;
+  const scopeAccent = programmeIndex >= 0 ? accentFor(programmeIndex) : "var(--border)";
 
   return (
     <div className={styles.page}>
       {header}
 
-      <nav className={styles.programmeNav} aria-label="Programme">
+      {/* ---- Programme tabs ------------------------------------------------ */}
+      <nav className={styles.programmeNav} aria-label="Programme" style={{ marginBottom: "0.9rem" }}>
         <Link
-          href={dashboardHref({
-            ...params,
-            programme: undefined,
-            campaign: undefined,
-          })}
-          className={`${styles.programmeTab} ${
-            scope.isAllProgrammes ? styles.programmeTabActive : ""
-          }`}
+          href={dashboardHref({ ...params, programme: undefined, campaign: undefined })}
+          className={`${styles.programmeTab} ${scope.isAllProgrammes ? styles.programmeTabActive : ""}`}
         >
           <span className={styles.programmeTabLabel}>All programmes</span>
           <span className={styles.programmeTabMeta}>
-            <span className={styles.programmeTabCount}>
-              {getAllCampaigns().length}
-            </span>{" "}
-            emails tracked
+            <span className={styles.programmeTabCount}>{getAllCampaigns().length}</span> emails tracked
           </span>
         </Link>
-
         {nav.map((item) => {
           const index = PROGRAMMES.findIndex((p) => p.id === item.id);
-          const accent = item.isUnassigned
-            ? "var(--text-quaternary)"
-            : accentFor(index);
-          const active =
-            scope!.programmeId === item.id && !scope!.isAllProgrammes;
-
+          const accent = item.isUnassigned ? "var(--text-quaternary)" : accentFor(index);
+          const active = scope!.programmeId === item.id && !scope!.isAllProgrammes;
           return (
             <Link
               key={item.id}
-              href={dashboardHref({
-                ...params,
-                programme: item.id,
-                campaign: undefined,
-              })}
-              className={`${styles.programmeTab} ${
-                active ? styles.programmeTabActive : ""
-              }`}
+              href={dashboardHref({ ...params, programme: item.id, campaign: undefined })}
+              className={`${styles.programmeTab} ${active ? styles.programmeTabActive : ""}`}
               style={{ ["--item-accent" as string]: accent }}
             >
               <span className={styles.programmeTabLabel}>{item.label}</span>
               <span className={styles.programmeTabMeta}>
                 {item.isUnassigned ? (
                   <>
-                    <span className={styles.programmeTabCount}>
-                      {item.campaignCount}
-                    </span>{" "}
-                    unrecognised
+                    <span className={styles.programmeTabCount}>{item.campaignCount}</span> unrecognised
                   </>
                 ) : (
                   <>
-                    {item.client} ·{" "}
-                    <span className={styles.programmeTabCount}>
-                      {item.campaignCount}
-                    </span>{" "}
+                    {item.client} · <span className={styles.programmeTabCount}>{item.campaignCount}</span>{" "}
                     email{item.campaignCount === 1 ? "" : "s"}
                   </>
                 )}
@@ -382,105 +345,176 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
         })}
       </nav>
 
-      <div className={styles.programmeHeader}>
-        {scope.programme && (
-          <span className={styles.clientChip}>
-            Client · {scope.programme.client}
+      {/* ---- Sticky controls: every figure-changing choice in one bar -------- */}
+      <div className={styles.stickyBar}>
+        <form method="get" className={styles.barCard}>
+          {scope.programme && <input type="hidden" name="programme" value={scope.programme.id} />}
+          {scope.isUnassigned && <input type="hidden" name="programme" value="unassigned" />}
+          {query && <input type="hidden" name="q" value={query} />}
+          {statusFilter && <input type="hidden" name="status" value={statusFilter} />}
+
+          <div className={styles.barRow}>
+            <div className={styles.barGroup}>
+              <label htmlFor="campaign">{scope.programme ? scope.programme.label : scopeLabel}</label>
+              <select id="campaign" name="campaign" defaultValue={scope.selectedCampaignId ?? ""}>
+                <option value="">All {allRows.length} emails</option>
+                {allRows.map((row) => (
+                  <option key={row.id} value={row.id}>
+                    {row.label}
+                  </option>
+                ))}
+              </select>
+              <InfoTip topic="campaignId" label="Focus on one email" />
+            </div>
+
+            <span className={styles.barDivider} aria-hidden="true" />
+
+            <span className={styles.barGroup}>
+              <input type="checkbox" id="bots" name="bots" value="exclude" defaultChecked={excludeBots} />
+              <label htmlFor="bots" style={{ textTransform: "none", letterSpacing: 0, fontWeight: 500, fontSize: "0.82rem", color: "var(--text-secondary)" }}>
+                Exclude likely bots
+              </label>
+              <InfoTip topic="bots" />
+            </span>
+
+            <span className={styles.barGroup}>
+              <input type="checkbox" id="tests" name="tests" value="include" defaultChecked={includeTests} />
+              <label htmlFor="tests" style={{ textTransform: "none", letterSpacing: 0, fontWeight: 500, fontSize: "0.82rem", color: "var(--text-secondary)" }}>
+                Show test &amp; pre-send
+              </label>
+              <InfoTip topic="preSend" />
+            </span>
+
+            <span className={styles.barGroup}>
+              <input type="checkbox" id="collapse" name="collapse" value="1" defaultChecked={collapseEchoes} />
+              <label htmlFor="collapse" style={{ textTransform: "none", letterSpacing: 0, fontWeight: 500, fontSize: "0.82rem", color: "var(--text-secondary)" }}>
+                Collapse echoes
+              </label>
+              <select name="window" aria-label="Echo window in seconds" defaultValue={String(echoWindowSeconds)} className={styles.inlineSelect}>
+                {ECHO_WINDOW_OPTIONS.map((seconds) => (
+                  <option key={seconds} value={seconds}>
+                    {seconds}s
+                  </option>
+                ))}
+              </select>
+              <InfoTip topic="collapsedClicks" />
+            </span>
+
+            <div className={styles.barActions}>
+              <button type="submit" className={styles.buttonPrimary}>
+                Apply
+              </button>
+              {mayExport ? (
+                <a href={exportHref} className={styles.buttonSecondary}>
+                  Export CSV
+                </a>
+              ) : (
+                <span className={styles.buttonDisabled} title="The raw event export is limited to administrator accounts.">
+                  Export CSV
+                </span>
+              )}
+            </div>
+          </div>
+          <p className={styles.barSummary}>{`// ${summaryParts.join(" · ")}`}</p>
+        </form>
+      </div>
+
+      {/* ---- Hidden-data hint: only when there is something hidden ---------- */}
+      {hiddenTestEvents + hiddenPreSendEvents > 0 && (
+        <div className={styles.hintBar}>
+          <strong>
+            {n(hiddenTestEvents)} test{hiddenPreSendEvents > 0 ? ` and ${n(hiddenPreSendEvents)} pre-send` : ""} event
+            {hiddenTestEvents + hiddenPreSendEvents === 1 ? "" : "s"} hidden.
+          </strong>
+          <span>Not counted as live — the build team checking links, before or after the -test URLs.</span>
+          <Link href={dashboardHref({ ...params, tests: "include" })}>Show them →</Link>
+          <InfoTip topic="preSend" />
+        </div>
+      )}
+
+      {/* ---- Headline figures --------------------------------------------- */}
+      <section className={`${styles.statsGrid} ${styles.statsGridTight}`}>
+        <div className={styles.statCard} style={{ ["--item-accent" as string]: accentFor(0) }}>
+          <span className={styles.statLabel}>
+            Total opens
+            <InfoTip topic="totalOpens" />
           </span>
-        )}
-        <h2>
-          {scopeLabel}
-          <InfoTip topic="programme" />
-        </h2>
+          <span className={styles.statValue}>{n(stats.totalOpens)}</span>
+          <span className={styles.statHint}>Estimated. Pixel loads, not people.</span>
+        </div>
+        <div className={styles.statCard} style={{ ["--item-accent" as string]: accentFor(1) }}>
+          <span className={styles.statLabel}>
+            Approx. unique opens
+            <InfoTip topic="approxUnique" />
+          </span>
+          <span className={styles.statValue}>{n(stats.approximateUniqueOpens)}</span>
+          <span className={styles.statHint}>Hashed IP + mail client. Not recipients.</span>
+        </div>
+        <div className={styles.statCard} style={{ ["--item-accent" as string]: accentFor(2) }}>
+          <span className={styles.statLabel}>
+            {collapseEchoes ? "Collapsed clicks" : "Total clicks"}
+            <InfoTip topic={collapseEchoes ? "collapsedClicks" : "totalClicks"} />
+          </span>
+          <span className={styles.statValue}>{n(stats.totalClicks)}</span>
+          <span className={styles.statHint}>{clicksHint}</span>
+        </div>
+        <div className={styles.statCard} style={{ ["--item-accent" as string]: accentFor(3) }}>
+          <span className={styles.statLabel}>
+            Genuine clicks
+            <InfoTip topic="triage" />
+          </span>
+          <span className={styles.statValue}>{triage ? n(triage.clicks.genuine) : "—"}</span>
+          <span className={styles.statHint}>
+            After triage: not bot, internal, echo or repeat.
+          </span>
+        </div>
+        <div className={styles.statCard} style={{ ["--item-accent" as string]: accentFor(4) }}>
+          <span className={styles.statLabel}>
+            Clicks per open
+            <InfoTip topic="clicksPerOpen" />
+          </span>
+          <span className={styles.statValue}>{formatClickRate(stats.totalOpens, stats.totalClicks)}</span>
+          <span className={styles.statHint}>A rough ratio. Can exceed 100%.</span>
+        </div>
+      </section>
+      <p className={styles.sourceLineTight}>
+        {SOURCE_LINE}
+        {collapseEchoes && ` Click figures collapse near-simultaneous events on the same link within ${echoWindowSeconds} seconds to one.`}
+      </p>
+
+      {/* ---- The emails — always open, this is the repository ------------- */}
+      <section className={`${styles.panel} ${styles.panelSpaced}`} style={{ borderLeft: `var(--accent-bar) solid ${scopeAccent}` }}>
+        <div className={styles.sectionTitleRow}>
+          <div className={styles.sectionTitleGroup}>
+            <h2>{scopeLabel}</h2>
+            <InfoTip topic="programme" />
+          </div>
+          <p className={styles.sectionHint}>
+            {rows.length === allRows.length
+              ? `${allRows.length} email${allRows.length === 1 ? "" : "s"} · ${awaitingSetup} awaiting setup`
+              : `${rows.length} of ${allRows.length} shown`}
+          </p>
+        </div>
+
         {scope.programme?.description && (
-          <p className={styles.programmeDescription}>
+          <p className={styles.programmeDescription} style={{ marginBottom: "0.9rem" }}>
             {scope.programme.description}
           </p>
         )}
-        {scope.isAllProgrammes && (
-          <p className={styles.programmeDescription}>
-            A service-wide total across unrelated client audiences. Useful for a
-            sense of volume; pick a programme before reading anything into the
-            figures.
+        {scope.isUnassigned && (
+          <p className={styles.programmeDescription} style={{ marginBottom: "0.9rem" }}>
+            Campaign IDs recorded in the data that no programme claims — a typo in a build, a legacy
+            send, or a pixel with no ID. Nothing is discarded.
           </p>
         )}
-        {scope.isUnassigned && (
-          <p className={styles.programmeDescription}>
-            Campaign IDs recorded in the data that no programme claims —
-            normally a typo in an email build, a legacy send, or a pixel
-            requested with no ID at all. Nothing is discarded, so anything
-            unexpected shows up here.
-          </p>
-        )}
-      </div>
 
-      <div className={styles.notice}>
-        <span className={styles.noticeHead}>Before you read these numbers</span>
-        Opens are <strong>estimates</strong>. Mail clients block, cache and
-        pre-load tracking pixels, so opens are under-counted and over-counted at
-        the same time. Approximate unique counts group by hashed IP address and
-        mail client; they are a rough de-duplication and{" "}
-        <strong>not a count of people</strong>. Clicks are the more dependable
-        signal — but security scanners can echo a click from a second address
-        seconds later, which is what the collapse toggle is for.
-        <p className={styles.noticeLinks}>
-          <Link href="/admin/guide">Read the full guide →</Link>
-          {"  ·  "}
-          <Link href={duplicationHref(params)}>
-            See the duplication analysis →
-          </Link>
-        </p>
-      </div>
-
-      <form method="get" className={styles.filterBar}>
-        {scope.programme && (
-          <input type="hidden" name="programme" value={scope.programme.id} />
-        )}
-        {scope.isUnassigned && (
-          <input type="hidden" name="programme" value="unassigned" />
-        )}
-
-        <div className={styles.filterRow}>
-          <div className={styles.filterField}>
-            <label className={styles.filterLabel} htmlFor="campaign">
-              Focus figures on
-              <InfoTip topic="campaignId" label="Focus figures on" />
-            </label>
-            <select
-              id="campaign"
-              name="campaign"
-              defaultValue={scope.selectedCampaignId ?? ""}
-            >
-              <option value="">
-                Every email in {scope.programme ? "this programme" : "view"}
-              </option>
-              {allRows.map((row) => (
-                <option key={row.id} value={row.id}>
-                  {row.label}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className={styles.filterField}>
-            <label className={styles.filterLabel} htmlFor="q">
-              Search the list
-            </label>
-            <input
-              id="q"
-              name="q"
-              type="search"
-              defaultValue={query}
-              placeholder="Email name, campaign ID or link ID"
-            />
-          </div>
-
-          <div className={styles.filterField}>
-            <label className={styles.filterLabel} htmlFor="status">
-              Status
-              <InfoTip topic="status" />
-            </label>
-            <select id="status" name="status" defaultValue={statusFilter ?? ""}>
+        {allRows.length > 5 && (
+          <form method="get" className={styles.listControls}>
+            {Object.entries({ programme: params.programme, campaign: params.campaign, bots: params.bots, tests: params.tests, collapse: params.collapse, window: params.window })
+              .filter(([, v]) => v)
+              .map(([k, v]) => <input key={k} type="hidden" name={k} value={v as string} />)}
+            <input id="q" name="q" type="search" defaultValue={query} placeholder="Search emails, IDs or link IDs" aria-label="Search the list" />
+            <select name="status" defaultValue={statusFilter ?? ""} aria-label="Status">
               <option value="">Any status</option>
               {STATUS_ORDER.map((status) => (
                 <option key={status} value={status}>
@@ -488,298 +522,15 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
                 </option>
               ))}
             </select>
-          </div>
-
-          <div className={styles.toggleGroup}>
-            <span className={styles.toggle}>
-              <input
-                type="checkbox"
-                id="bots"
-                name="bots"
-                value="exclude"
-                defaultChecked={excludeBots}
-              />
-              <label htmlFor="bots">Exclude likely bots</label>
-              <InfoTip topic="bots" />
-            </span>
-            <span className={styles.toggle}>
-              <input
-                type="checkbox"
-                id="tests"
-                name="tests"
-                value="include"
-                defaultChecked={includeTests}
-              />
-              <label htmlFor="tests">Include test sends</label>
-              <InfoTip topic="testSends" />
-            </span>
-            <span className={styles.toggle}>
-              <input
-                type="checkbox"
-                id="collapse"
-                name="collapse"
-                value="1"
-                defaultChecked={collapseEchoes}
-              />
-              <label htmlFor="collapse">Collapse near-simultaneous echoes</label>
-              <InfoTip topic="collapsedClicks" />
-              <select
-                name="window"
-                aria-label="Echo window in seconds"
-                defaultValue={String(echoWindowSeconds)}
-                className={styles.inlineSelect}
-              >
-                {ECHO_WINDOW_OPTIONS.map((seconds) => (
-                  <option key={seconds} value={seconds}>
-                    within {seconds}s
-                  </option>
-                ))}
-              </select>
-              <InfoTip topic="echoWindow" />
-            </span>
-          </div>
-
-          <div className={styles.filterActions}>
-            <button type="submit" className={styles.buttonPrimary}>
-              Apply
+            <button type="submit" className={styles.buttonSecondary}>
+              Filter list
             </button>
-            {mayExport ? (
-              <a href={exportHref} className={styles.buttonSecondary}>
-                Export CSV
-              </a>
-            ) : (
-              <span
-                className={styles.buttonDisabled}
-                title="The raw event export is limited to administrator accounts."
-              >
-                Export CSV
-              </span>
-            )}
-            <InfoTip topic="csvExport" />
-          </div>
-        </div>
-
-        <p className={styles.filterSummary}>
-          {`// showing: ${summaryParts.join(" · ")}`}
-        </p>
-      </form>
-
-      <section className={styles.statsGrid}>
-        <div
-          className={styles.statCard}
-          style={{ ["--item-accent" as string]: accentFor(0) }}
-        >
-          <span className={styles.statLabel}>
-            Total opens
-            <InfoTip topic="totalOpens" />
-          </span>
-          <span className={styles.statValue}>
-            {stats.totalOpens.toLocaleString("en-GB")}
-          </span>
-          <span className={styles.statHint}>
-            Estimated. Pixel loads, not people.
-          </span>
-        </div>
-
-        <div
-          className={styles.statCard}
-          style={{ ["--item-accent" as string]: accentFor(1) }}
-        >
-          <span className={styles.statLabel}>
-            Approx. unique opens
-            <InfoTip topic="approxUnique" />
-          </span>
-          <span className={styles.statValue}>
-            {stats.approximateUniqueOpens.toLocaleString("en-GB")}
-          </span>
-          <span className={styles.statHint}>
-            Distinct hashed IP + mail client. Not recipients.
-          </span>
-        </div>
-
-        <div
-          className={styles.statCard}
-          style={{ ["--item-accent" as string]: accentFor(2) }}
-        >
-          <span className={styles.statLabel}>
-            {collapseEchoes ? "Collapsed clicks" : "Total clicks"}
-            <InfoTip topic={collapseEchoes ? "collapsedClicks" : "totalClicks"} />
-          </span>
-          <span className={styles.statValue}>
-            {stats.totalClicks.toLocaleString("en-GB")}
-          </span>
-          <span className={styles.statHint}>{clicksHint}</span>
-        </div>
-
-        <div
-          className={styles.statCard}
-          style={{ ["--item-accent" as string]: accentFor(3) }}
-        >
-          <span className={styles.statLabel}>
-            Approx. unique clicks
-            <InfoTip topic="approxUnique" />
-          </span>
-          <span className={styles.statValue}>
-            {stats.approximateUniqueClicks.toLocaleString("en-GB")}
-          </span>
-          <span className={styles.statHint}>
-            {collapseEchoes
-              ? "Over primary clicks only. Not recipients."
-              : "Distinct hashed IP + mail client. Not recipients."}
-          </span>
-        </div>
-
-        <div
-          className={styles.statCard}
-          style={{ ["--item-accent" as string]: accentFor(4) }}
-        >
-          <span className={styles.statLabel}>
-            Clicks per open
-            <InfoTip topic="clicksPerOpen" />
-          </span>
-          <span className={styles.statValue}>
-            {formatClickRate(stats.totalOpens, stats.totalClicks)}
-          </span>
-          <span className={styles.statHint}>
-            A rough ratio. Can exceed 100%.
-          </span>
-        </div>
-      </section>
-
-      <p className={styles.sourceLineBlock}>
-        {SOURCE_LINE}
-        {collapseEchoes &&
-          ` Click figures collapse near-simultaneous events on the same link within ${echoWindowSeconds} seconds to one.`}
-      </p>
-
-      {triage && (
-        <section className={`${styles.panel} ${styles.panelSpaced}`}>
-          <div className={styles.sectionTitleRow}>
-            <div className={styles.sectionTitleGroup}>
-              <h2>Click triage — from raw to genuine</h2>
-              <InfoTip topic="triage" />
-            </div>
-            <p className={styles.sectionHint}>
-              {scope.selectedCampaignId ? "This email" : "Emails in this view"} ·
-              every click recorded, classified · window {echoWindowSeconds}s
-            </p>
-          </div>
-          <div className={styles.tableScroll}>
-            <table className={styles.table}>
-              <thead>
-                <tr>
-                  <th>Stage</th>
-                  <th className={styles.numeric}>Clicks</th>
-                  <th className={styles.numeric}>Opens</th>
-                  <th>What it means</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td className={styles.rowHead}>Raw events</td>
-                  <td className={styles.numeric}>{triage.clicks.raw}</td>
-                  <td className={styles.numeric}>{triage.opens.raw}</td>
-                  <td className={styles.rowNote} style={{ display: "table-cell" }}>
-                    Everything recorded on these campaign IDs and their -test twins.
-                  </td>
-                </tr>
-                <tr>
-                  <td>− Test</td>
-                  <td className={styles.numeric}>{triage.clicks.test}</td>
-                  <td className={styles.numeric}>{triage.opens.test}</td>
-                  <td className={styles.rowNote} style={{ display: "table-cell" }}>
-                    On a -test campaign ID.
-                  </td>
-                </tr>
-                <tr>
-                  <td>− Pre-send</td>
-                  <td className={styles.numeric}>{triage.clicks.preSend}</td>
-                  <td className={styles.numeric}>{triage.opens.preSend}</td>
-                  <td className={styles.rowNote} style={{ display: "table-cell" }}>
-                    On the live ID before the email was sent.
-                  </td>
-                </tr>
-                <tr>
-                  <td className={styles.rowHead}>= Live</td>
-                  <td className={styles.numeric}>{triage.clicks.live}</td>
-                  <td className={styles.numeric}>{triage.opens.live}</td>
-                  <td className={styles.rowNote} style={{ display: "table-cell" }}>
-                    What the headline figures count.
-                  </td>
-                </tr>
-                <tr>
-                  <td>− Likely bot</td>
-                  <td className={styles.numeric}>{triage.clicks.bot}</td>
-                  <td className={styles.numeric}>{triage.opens.bot}</td>
-                  <td className={styles.rowNote} style={{ display: "table-cell" }}>
-                    Scanner, proxy or automation user agent.
-                  </td>
-                </tr>
-                <tr>
-                  <td>
-                    − Likely internal
-                    <InfoTip topic="internal" />
-                  </td>
-                  <td className={styles.numeric}>{triage.clicks.internal}</td>
-                  <td className={styles.numeric}>{triage.opens.internal}</td>
-                  <td className={styles.rowNote} style={{ display: "table-cell" }}>
-                    A device that had produced test or pre-send events ({triage.internalDevices} device{triage.internalDevices === 1 ? "" : "s"}).
-                  </td>
-                </tr>
-                <tr>
-                  <td>− Scanner echo</td>
-                  <td className={styles.numeric}>{triage.clicks.echo}</td>
-                  <td className={styles.numeric}>—</td>
-                  <td className={styles.rowNote} style={{ display: "table-cell" }}>
-                    Same link, seconds apart, different address.
-                  </td>
-                </tr>
-                <tr>
-                  <td>− Repeat</td>
-                  <td className={styles.numeric}>{triage.clicks.repeat}</td>
-                  <td className={styles.numeric}>—</td>
-                  <td className={styles.rowNote} style={{ display: "table-cell" }}>
-                    Same link, seconds apart, same address.
-                  </td>
-                </tr>
-                <tr className={styles.rowSelected}>
-                  <td className={styles.rowHead}>= Genuine</td>
-                  <td className={`${styles.numeric} ${styles.rowHead}`}>{triage.clicks.genuine}</td>
-                  <td className={`${styles.numeric} ${styles.rowHead}`}>{triage.opens.genuine}</td>
-                  <td className={styles.rowNote} style={{ display: "table-cell" }}>
-                    Approx. {triage.genuineApproxUniqueClicks} distinct device{triage.genuineApproxUniqueClicks === 1 ? "" : "s"} clicking,{" "}
-                    {triage.genuineApproxUniqueOpens} opening. Opens remain estimates.
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-          <p className={styles.sourceLine}>
-            Phase comes from each email&rsquo;s status and live-from moment; the
-            reason is applied in the order shown, first match wins. Nothing is
-            stored — a corrected live-from re-triages history. The CSV export
-            carries phase and reason per row.
-          </p>
-        </section>
-      )}
-
-      <section className={`${styles.panel} ${styles.panelSpaced}`}>
-        <div className={styles.sectionTitleRow}>
-          <div className={styles.sectionTitleGroup}>
-            <h2>Emails in this view</h2>
-            <InfoTip topic="trackedCtas" label="Emails in this view" />
-          </div>
-          <p className={styles.sectionHint}>
-            {rows.length === allRows.length
-              ? `${allRows.length} email${allRows.length === 1 ? "" : "s"} · ${awaitingSetup} awaiting tracking setup`
-              : `${rows.length} of ${allRows.length} shown · list filtered`}
-          </p>
-        </div>
+          </form>
+        )}
 
         {rows.length === 0 ? (
           <p className={styles.emptyState}>
-            <strong>Nothing matches that filter.</strong> Clear the search box
-            or set status back to Any status.
+            <strong>Nothing matches that filter.</strong> Clear the search box or set status back to Any.
           </p>
         ) : (
           <div className={styles.tableScroll}>
@@ -787,10 +538,6 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
               <thead>
                 <tr>
                   <th>Email</th>
-                  <th>
-                    Campaign ID
-                    <InfoTip topic="campaignId" />
-                  </th>
                   <th>
                     Status
                     <InfoTip topic="status" />
@@ -806,15 +553,13 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
                   </th>
                   <th className={styles.numeric}>
                     {collapseEchoes ? "Clicks (collapsed)" : "Clicks"}
-                    <InfoTip
-                      topic={collapseEchoes ? "collapsedClicks" : "totalClicks"}
-                    />
+                    <InfoTip topic={collapseEchoes ? "collapsedClicks" : "totalClicks"} />
                   </th>
                   <th className={styles.numeric}>
                     Clicks/open
                     <InfoTip topic="clicksPerOpen" />
                   </th>
-                  <th>Setup</th>
+                  <th />
                 </tr>
               </thead>
               <tbody>
@@ -824,6 +569,7 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
                     row={row}
                     selected={scope!.selectedCampaignId === row.id}
                     includeTests={includeTests}
+                    focusHref={dashboardHref({ ...params, campaign: row.id })}
                   />
                 ))}
               </tbody>
@@ -831,84 +577,133 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
           </div>
         )}
 
-        {hiddenTestEvents + hiddenPreSendEvents > 0 && (
-          <p className={styles.emptyState} style={{ marginTop: "1rem" }}>
-            <strong>
-              {hiddenTestEvents} test event{hiddenTestEvents === 1 ? "" : "s"}
-              {hiddenPreSendEvents > 0 &&
-                ` and ${hiddenPreSendEvents} pre-send event${hiddenPreSendEvents === 1 ? "" : "s"}`}{" "}
-              recorded for this view — hidden from the figures.
-            </strong>{" "}
-            Test sends use the <code>-test</code> campaign ID; pre-send events
-            are on the live ID before the email went out. Neither counts as
-            live.{" "}
-            <Link href={dashboardHref({ ...params, tests: "include" })}>
-              Show test sends →
-            </Link>{" "}
-            or open an email&rsquo;s <em>Set up</em> page to see each test
-            click by link.
-          </p>
-        )}
         {!hasAnyEvents && (
-          <p className={styles.emptyState} style={{ marginTop: "1rem" }}>
-            <strong>No tracking events recorded in this view yet.</strong> That
-            is the expected state while emails are in approval, or before a
-            first send. Open <em>Set up</em> on a row to generate the pixel and
-            link URLs the email build needs.
+          <p className={styles.emptyState} style={{ marginTop: "0.9rem" }}>
+            <strong>No live events in this view yet.</strong>{" "}
+            {hiddenTestEvents + hiddenPreSendEvents > 0
+              ? "Test and pre-send activity exists — see the note above."
+              : "Expected while emails are in approval or before a first send."}
           </p>
         )}
       </section>
 
-      <div className={styles.twoCol}>
-        <section className={styles.panel}>
-          <div className={styles.sectionTitleRow}>
-            <div className={styles.sectionTitleGroup}>
-              <h2>Clicks by link</h2>
-              <InfoTip topic="linkId" label="Clicks by link" />
-            </div>
-          </div>
-          {stats.clicksByLinkId.length === 0 ? (
-            <p className={styles.empty}>
-              No clicks recorded in this view yet.
-            </p>
-          ) : (
+      {/* ---- Everything else: collapsed by default, answer in the header ---- */}
+      {triage && (
+        <Collapsible
+          id="triage"
+          title="Click triage"
+          accent="var(--accent-teal)"
+          summary={
+            <>
+              <span className={styles.chip}>raw {n(triage.clicks.raw)}</span>
+              <span className={styles.chip}>test {n(triage.clicks.test)}</span>
+              <span className={styles.chip}>pre-send {n(triage.clicks.preSend)}</span>
+              <span className={styles.chip}>live {n(triage.clicks.live)}</span>
+              <span className={styles.chip}>bot {n(triage.clicks.bot)}</span>
+              <span className={styles.chip}>internal {n(triage.clicks.internal)}</span>
+              <span className={styles.chip}>echo {n(triage.clicks.echo)}</span>
+              <span className={styles.chip}>repeat {n(triage.clicks.repeat)}</span>
+              <span className={`${styles.chip} ${styles.chipStrong}`} style={{ ["--item-accent" as string]: "var(--accent-teal)" }}>
+                genuine {n(triage.clicks.genuine)}
+              </span>
+            </>
+          }
+          aside={<InfoTip topic="triage" />}
+        >
+          <div className={styles.tableScroll}>
             <table className={styles.table}>
               <thead>
                 <tr>
-                  <th>Link ID</th>
-                  <th className={styles.numeric}>
-                    {collapseEchoes ? "Clicks (collapsed)" : "Clicks"}
-                  </th>
+                  <th>Stage</th>
+                  <th className={styles.numeric}>Clicks</th>
+                  <th className={styles.numeric}>Opens</th>
+                  <th>What it means</th>
                 </tr>
               </thead>
               <tbody>
-                {stats.clicksByLinkId.map((row) => (
-                  <tr key={row.linkId}>
-                    <td className={styles.mono}>{row.linkId}</td>
-                    <td className={styles.numeric}>
-                      {row.count.toLocaleString("en-GB")}
-                    </td>
+                {(
+                  [
+                    ["Raw events", triage.clicks.raw, triage.opens.raw, "Everything recorded on these campaign IDs and their -test twins.", true],
+                    ["− Test", triage.clicks.test, triage.opens.test, "On a -test campaign ID.", false],
+                    ["− Pre-send", triage.clicks.preSend, triage.opens.preSend, "On the live ID before the email was sent.", false],
+                    ["= Live", triage.clicks.live, triage.opens.live, "What the headline figures count.", true],
+                    ["− Likely bot", triage.clicks.bot, triage.opens.bot, "Scanner, proxy or automation user agent.", false],
+                    ["− Likely internal", triage.clicks.internal, triage.opens.internal, `A device that had produced test or pre-send events (${triage.internalDevices} device${triage.internalDevices === 1 ? "" : "s"}).`, false],
+                    ["− Scanner echo", triage.clicks.echo, null, "Same link, seconds apart, different address.", false],
+                    ["− Repeat", triage.clicks.repeat, null, "Same link, seconds apart, same address.", false],
+                  ] as [string, number, number | null, string, boolean][]
+                ).map(([stage, clicks, opens, meaning, bold]) => (
+                  <tr key={stage}>
+                    <td className={bold ? styles.rowHead : undefined}>{stage}</td>
+                    <td className={styles.numeric}>{n(clicks)}</td>
+                    <td className={styles.numeric}>{opens === null ? "—" : n(opens)}</td>
+                    <td className={styles.rowNote} style={{ display: "table-cell" }}>{meaning}</td>
                   </tr>
                 ))}
+                <tr className={styles.rowSelected}>
+                  <td className={styles.rowHead}>= Genuine</td>
+                  <td className={`${styles.numeric} ${styles.rowHead}`}>{n(triage.clicks.genuine)}</td>
+                  <td className={`${styles.numeric} ${styles.rowHead}`}>{n(triage.opens.genuine)}</td>
+                  <td className={styles.rowNote} style={{ display: "table-cell" }}>
+                    Approx. {n(triage.genuineApproxUniqueClicks)} distinct device{triage.genuineApproxUniqueClicks === 1 ? "" : "s"} clicking, {n(triage.genuineApproxUniqueOpens)} opening. Opens remain estimates.
+                  </td>
+                </tr>
               </tbody>
             </table>
-          )}
-          <p className={styles.sourceLine}>
-            Counts cover only the emails in the current view. The same link ID
-            can be used in more than one email.
-          </p>
-        </section>
-
-        <section className={styles.panel}>
-          <div className={styles.sectionTitleRow}>
-            <div className={styles.sectionTitleGroup}>
-              <h2>Approximate uniques by email</h2>
-              <InfoTip topic="duplication" label="Approximate uniques" />
-            </div>
           </div>
-          {allRows.length === 0 ? (
-            <p className={styles.empty}>Nothing to show.</p>
+          <p className={styles.sourceLine}>
+            Phase from each email&rsquo;s status and live-from; reason applied in the order shown, first match wins. Nothing is stored — a
+            corrected live-from re-triages history. The CSV export carries phase and reason per row.{" "}
+            <Link href={duplicationHref(params)}>Open the duplication analysis →</Link>
+          </p>
+        </Collapsible>
+      )}
+
+      <Collapsible
+        id="links"
+        title="Clicks by link"
+        accent="var(--accent-cyan)"
+        summary={
+          stats.clicksByLinkId.length === 0 ? (
+            <span className={styles.chip}>no clicks in view</span>
           ) : (
+            <>
+              {stats.clicksByLinkId.slice(0, 4).map((row) => (
+                <span key={row.linkId} className={styles.chip}>
+                  {row.linkId} {n(row.count)}
+                </span>
+              ))}
+              {stats.clicksByLinkId.length > 4 && <span className={styles.chip}>+{stats.clicksByLinkId.length - 4} more</span>}
+            </>
+          )
+        }
+        aside={<InfoTip topic="linkId" label="Clicks by link" />}
+      >
+        <div className={styles.twoCol} style={{ marginBottom: 0 }}>
+          <div>
+            {stats.clicksByLinkId.length === 0 ? (
+              <p className={styles.empty}>No clicks recorded in this view yet.</p>
+            ) : (
+              <table className={styles.table}>
+                <thead>
+                  <tr>
+                    <th>Link ID</th>
+                    <th className={styles.numeric}>{collapseEchoes ? "Clicks (collapsed)" : "Clicks"}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {stats.clicksByLinkId.map((row) => (
+                    <tr key={row.linkId}>
+                      <td className={styles.mono}>{row.linkId}</td>
+                      <td className={styles.numeric}>{n(row.count)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+            <p className={styles.sourceLine}>Counts cover only the emails in view. The same link ID can be used in more than one email.</p>
+          </div>
+          <div>
             <table className={styles.table}>
               <thead>
                 <tr>
@@ -921,34 +716,32 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
                 {allRows.map((row) => (
                   <tr key={row.id}>
                     <td>{row.label}</td>
-                    <td className={styles.numeric}>
-                      {row.metrics.approxUniqueOpens.toLocaleString("en-GB")}
-                    </td>
-                    <td className={styles.numeric}>
-                      {row.metrics.approxUniqueClicks.toLocaleString("en-GB")}
-                    </td>
+                    <td className={styles.numeric}>{n(row.metrics.approxUniqueOpens)}</td>
+                    <td className={styles.numeric}>{n(row.metrics.approxUniqueClicks)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          )}
-          <p className={styles.sourceLine}>
-            These do not add up to the programme figure above. One person who
-            opened two emails counts once in each row and once overall.
-          </p>
-        </section>
-      </div>
-
-      <section className={styles.panel}>
-        <div className={styles.sectionTitleRow}>
-          <div className={styles.sectionTitleGroup}>
-            <h2>Recent events</h2>
-            <InfoTip topic="recentEvents" />
+            <p className={styles.sourceLine}>
+              Approximate uniques by email. These do not add up to the programme figure — one person who opened two emails counts once in each row and once overall.
+            </p>
           </div>
-          <p className={styles.sectionHint}>
-            Latest 50 in this view · {UK_TIME_LABEL}
-          </p>
         </div>
+      </Collapsible>
+
+      <Collapsible
+        id="recent"
+        title="Recent events"
+        accent="var(--accent-violet)"
+        summary={
+          <>
+            <span className={styles.chip}>latest {n(stats.recentEvents.length)}</span>
+            <span className={styles.chip}>{UK_TIME_LABEL}</span>
+            {stats.recentEvents[0] && <span className={styles.chip}>last {formatUkTime(stats.recentEvents[0].createdAt)}</span>}
+          </>
+        }
+        aside={<InfoTip topic="recentEvents" />}
+      >
         {stats.recentEvents.length === 0 ? (
           <p className={styles.empty}>No events recorded in this view yet.</p>
         ) : (
@@ -975,99 +768,76 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
                 </tr>
               </thead>
               <tbody>
-                {stats.recentEvents.map((event) => (
-                  <tr key={event.id}>
-                    <td className={styles.mono}>{formatUkTime(event.createdAt)}</td>
-                    <td>
-                      <span
-                        className={
-                          event.eventType === "open"
-                            ? styles.badgeOpen
-                            : styles.badgeClick
-                        }
-                      >
-                        {event.eventType}
-                      </span>
-                    </td>
-                    <td className={styles.mono}>{event.campaignId ?? "—"}</td>
-                    <td className={styles.mono}>{event.linkId ?? "—"}</td>
-                    <td>
-                      {event.ipCountry ?? "—"}
-                      {event.ipCity ? ` · ${event.ipCity}` : ""}
-                    </td>
-                    <td>
-                      {
-                        CLIENT_KIND_LABELS[
-                          (event.clientKind as keyof typeof CLIENT_KIND_LABELS) ??
-                            "unknown"
-                        ] ?? CLIENT_KIND_LABELS.unknown
-                      }
-                    </td>
-                    <td>
-                      <span className={styles.flagStack}>
-                        {phaseOf(event.campaignId, event.createdAt) !== "live" && (
-                          <span
-                            className={`${styles.pill} ${
-                              phaseOf(event.campaignId, event.createdAt) === "test"
-                                ? styles.pillTest
-                                : styles.pillInReview
-                            }`}
-                          >
-                            {PHASE_LABELS[phaseOf(event.campaignId, event.createdAt)]}
-                          </span>
-                        )}
-                        {triage?.byId.get(event.id)?.reason === "internal" && (
-                          <span
-                            className={`${styles.pill} ${styles.pillInReview}`}
-                            title={REASON_LABELS.internal}
-                          >
-                            internal
-                          </span>
-                        )}
-                        {event.isBot && (
-                          <span
-                            className={`${styles.pill} ${styles.pillPending}`}
-                            title={
-                              event.botReason
-                                ? BOT_REASON_LABELS[event.botReason] ??
-                                  event.botReason
-                                : "Matched a bot pattern"
-                            }
-                          >
-                            {event.botReason ?? "bot"}
-                          </span>
-                        )}
-                        {stats!.echoEventIds.has(event.id) && (
-                          <span className={`${styles.pill} ${styles.roleEcho}`}>
-                            echo
-                          </span>
-                        )}
-                        {stats!.repeatEventIds.has(event.id) && (
-                          <span
-                            className={`${styles.pill} ${styles.roleRepeat}`}
-                          >
-                            repeat
-                          </span>
-                        )}
-                        {!event.isBot &&
-                          !stats!.echoEventIds.has(event.id) &&
-                          !stats!.repeatEventIds.has(event.id) &&
-                          phaseOf(event.campaignId, event.createdAt) === "live" &&
-                          triage?.byId.get(event.id)?.reason !== "internal" &&
-                          "—"}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
+                {stats.recentEvents.map((event) => {
+                  const phase = phaseOf(event.campaignId, event.createdAt);
+                  const reason = triage?.byId.get(event.id)?.reason;
+                  const isEcho = stats!.echoEventIds.has(event.id);
+                  const isRepeat = stats!.repeatEventIds.has(event.id);
+                  const plain = !event.isBot && !isEcho && !isRepeat && phase === "live" && reason !== "internal";
+                  return (
+                    <tr key={event.id}>
+                      <td className={styles.mono}>{formatUkTime(event.createdAt)}</td>
+                      <td>
+                        <span className={event.eventType === "open" ? styles.badgeOpen : styles.badgeClick}>{event.eventType}</span>
+                      </td>
+                      <td className={styles.mono}>{event.campaignId ?? "—"}</td>
+                      <td className={styles.mono}>{event.linkId ?? "—"}</td>
+                      <td>
+                        {event.ipCountry ?? "—"}
+                        {event.ipCity ? ` · ${event.ipCity}` : ""}
+                      </td>
+                      <td>
+                        {CLIENT_KIND_LABELS[(event.clientKind as keyof typeof CLIENT_KIND_LABELS) ?? "unknown"] ?? CLIENT_KIND_LABELS.unknown}
+                      </td>
+                      <td>
+                        <span className={styles.flagStack}>
+                          {phase !== "live" && (
+                            <span className={`${styles.pill} ${phase === "test" ? styles.pillTest : styles.pillInReview}`}>{PHASE_LABELS[phase]}</span>
+                          )}
+                          {reason === "internal" && (
+                            <span className={`${styles.pill} ${styles.pillInReview}`} title={REASON_LABELS.internal}>
+                              internal
+                            </span>
+                          )}
+                          {event.isBot && (
+                            <span
+                              className={`${styles.pill} ${styles.pillPending}`}
+                              title={event.botReason ? BOT_REASON_LABELS[event.botReason] ?? event.botReason : "Matched a bot pattern"}
+                            >
+                              {event.botReason ?? "bot"}
+                            </span>
+                          )}
+                          {isEcho && <span className={`${styles.pill} ${styles.roleEcho}`}>echo</span>}
+                          {isRepeat && <span className={`${styles.pill} ${styles.roleRepeat}`}>repeat</span>}
+                          {plain && "—"}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
         )}
-      </section>
+      </Collapsible>
+
+      <Collapsible
+        id="reading"
+        title="Before you read these numbers"
+        accent="var(--accent-orange)"
+        summary={<span className={styles.chip}>opens are estimates · uniques are not people</span>}
+        aside={<Link href="/admin/guide">Full guide →</Link>}
+      >
+        <p className={styles.programmeDescription} style={{ paddingTop: "0.75rem" }}>
+          Opens are <strong>estimates</strong>: mail clients block, cache and pre-load tracking pixels, so opens are under-counted and
+          over-counted at the same time. Approximate unique counts group by hashed IP address and mail client — a rough de-duplication,{" "}
+          <strong>not a count of people</strong>. Clicks are the dependable signal, and <em>Genuine clicks</em> is the dependable click figure:
+          it removes test and pre-send activity, likely bots, likely internal devices, scanner echoes and repeats.
+        </p>
+      </Collapsible>
 
       <p className={styles.footerSignature}>
-        <strong>FUSION</strong> <span>·</span> email link tracking{" "}
-        <span>·</span> <strong>INTERNAL</strong>
+        <strong>FUSION</strong> <span>·</span> email link tracking <span>·</span> <strong>INTERNAL</strong>
       </p>
     </div>
   );
@@ -1077,16 +847,14 @@ function WaveRow({
   row,
   selected,
   includeTests,
+  focusHref,
 }: {
   row: CampaignRowView;
   selected: boolean;
   includeTests: boolean;
+  focusHref: string;
 }) {
-  const testEvents = row.testMetrics
-    ? row.testMetrics.opens + row.testMetrics.clicks
-    : 0;
-  // With the toggle on, the row's own figures are live-only, so say what the
-  // test twin adds — the headline figures include it.
+  const testEvents = row.testMetrics ? row.testMetrics.opens + row.testMetrics.clicks : 0;
   const testNote =
     includeTests && row.testMetrics
       ? `// plus ${row.testMetrics.opens} test open${row.testMetrics.opens === 1 ? "" : "s"}, ${row.testMetrics.clicks} test click${row.testMetrics.clicks === 1 ? "" : "s"} in the headline figures`
@@ -1097,11 +865,13 @@ function WaveRow({
   return (
     <tr className={selected ? styles.rowSelected : undefined}>
       <td>
-        <span className={styles.rowHead}>{row.label}</span>
+        <Link href={focusHref} className={styles.rowHead} style={{ textDecoration: "none" }} title="Focus the figures on this email">
+          {row.label}
+        </Link>
+        <span className={styles.rowNote}>
+          <span className={styles.mono} style={{ fontSize: "0.7rem" }}>{row.id}</span>
+        </span>
         {row.notes && <span className={styles.rowNote}>{row.notes}</span>}
-      </td>
-      <td>
-        <span className={styles.mono}>{row.id}</span>
         {testNote && <span className={styles.rowNoteAccent}>{testNote}</span>}
         {row.liveFromMissing && (
           <span className={styles.rowNoteAccent} title="Set liveFrom in src/config/programmes.ts">
@@ -1111,13 +881,9 @@ function WaveRow({
       </td>
       <td>
         {row.status ? (
-          <span className={`${styles.pill} ${STATUS_PILL_CLASS[row.status]}`}>
-            {CAMPAIGN_STATUS_LABELS[row.status]}
-          </span>
+          <span className={`${styles.pill} ${STATUS_PILL_CLASS[row.status]}`}>{CAMPAIGN_STATUS_LABELS[row.status]}</span>
         ) : (
-          <span className={`${styles.pill} ${styles.pillNone}`}>
-            Not defined
-          </span>
+          <span className={`${styles.pill} ${styles.pillNone}`}>Not defined</span>
         )}
       </td>
       <td>{row.sendDate ?? "TBC"}</td>
@@ -1127,26 +893,15 @@ function WaveRow({
             {row.linkIds.length} link{row.linkIds.length === 1 ? "" : "s"}
           </span>
         ) : (
-          <span className={`${styles.pill} ${styles.pillPending}`}>
-            Not set up
-          </span>
+          <span className={`${styles.pill} ${styles.pillPending}`}>Not set up</span>
         )}
       </td>
-      <td className={styles.numeric}>
-        {row.metrics.opens.toLocaleString("en-GB")}
-      </td>
-      <td className={styles.numeric}>
-        {row.metrics.clicks.toLocaleString("en-GB")}
-      </td>
-      <td className={styles.numeric}>
-        {formatClickRate(row.metrics.opens, row.metrics.clicks)}
-      </td>
+      <td className={styles.numeric}>{n(row.metrics.opens)}</td>
+      <td className={styles.numeric}>{n(row.metrics.clicks)}</td>
+      <td className={styles.numeric}>{formatClickRate(row.metrics.opens, row.metrics.clicks)}</td>
       <td>
-        <Link
-          href={`/admin/setup/${encodeURIComponent(row.id)}`}
-          className={styles.linkAction}
-        >
-          {row.hasTrackedLinks ? "View pack →" : "Set up →"}
+        <Link href={`/admin/setup/${encodeURIComponent(row.id)}`} className={styles.linkAction}>
+          {row.hasTrackedLinks ? "Pack →" : "Set up →"}
         </Link>
       </td>
     </tr>

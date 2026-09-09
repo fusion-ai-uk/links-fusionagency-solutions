@@ -1205,3 +1205,167 @@
   font-family: var(--font-sans);
   font-size: 0.84rem;
 }
+
+/* ---------------------------------------------------------------------------
+   Dashboard layout pass — sticky controls, chips, list controls
+   --------------------------------------------------------------------------- */
+
+/* Stays at the top of the viewport while the page scrolls. */
+.stickyBar {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  margin: 0 -0.5rem 1.25rem;
+  padding: 0.75rem 0.5rem 0.7rem;
+  background: var(--surface-bg);
+  border-bottom: 1px solid var(--border);
+}
+
+.barCard {
+  padding: 0.75rem 1rem;
+  background: var(--surface-card);
+  border: 1px solid var(--border);
+}
+
+.barRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem 1rem;
+}
+
+.barGroup {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+}
+
+.barGroup label {
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+}
+
+.barGroup select {
+  padding: 0.4rem 0.6rem;
+  background: var(--surface-well);
+  border: 1px solid var(--border);
+  border-radius: 0;
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 0.84rem;
+  max-width: 260px;
+}
+
+.barGroup input[type="checkbox"] {
+  width: 0.95rem;
+  height: 0.95rem;
+  margin: 0;
+  accent-color: var(--accent-cyan);
+}
+
+.barDivider {
+  width: 1px;
+  height: 1.6rem;
+  background: var(--surface-subtle);
+}
+
+.barActions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-left: auto;
+}
+
+.barSummary {
+  margin: 0.55rem 0 0;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  line-height: 1.5;
+  color: var(--accent-orange);
+}
+
+/* Small mono fact chips used in collapsible headers and hints. */
+.chip {
+  display: inline-block;
+  padding: 0.1rem 0.5rem;
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.chipStrong {
+  color: var(--text-primary);
+  border-color: var(--item-accent, var(--border));
+}
+
+/* Controls that narrow a list only — sit inside the section they affect. */
+.listControls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0 0 0.9rem;
+}
+
+.listControls input[type="search"],
+.listControls select {
+  padding: 0.35rem 0.6rem;
+  background: var(--surface-well);
+  border: 1px solid var(--border);
+  border-radius: 0;
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 0.82rem;
+}
+
+.listControls input[type="search"] {
+  min-width: 220px;
+}
+
+.hintBar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.9rem;
+  margin: 0 0 1rem;
+  padding: 0.6rem 0.9rem;
+  background: var(--surface-well);
+  border: 1px solid var(--border-soft);
+  border-left: var(--accent-bar) solid var(--accent-orange);
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+}
+
+.hintBar strong {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.statsGridTight {
+  margin-bottom: 0.35rem;
+}
+
+.statsGridTight .statCard {
+  padding: 0.9rem 1rem 0.95rem;
+}
+
+.statsGridTight .statValue {
+  font-size: 1.7rem;
+}
+
+.sourceLineTight {
+  margin: 0 0 1.25rem;
+  font-size: 0.7rem;
+  line-height: 1.5;
+  color: var(--text-quaternary);
+}

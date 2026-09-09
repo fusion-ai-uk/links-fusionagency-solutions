@@ -1,0 +1,74 @@
+.details {
+  margin-bottom: 0.85rem;
+  background: var(--surface-card);
+  border: 1px solid var(--border);
+  border-left: var(--accent-bar) solid var(--item-accent, var(--border));
+}
+
+.summary {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.85rem 1.1rem;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+
+.summary::-webkit-details-marker {
+  display: none;
+}
+
+.summary:hover {
+  background: var(--surface-raised);
+}
+
+.summary:focus-visible {
+  outline: 2px solid var(--interactive);
+  outline-offset: -2px;
+}
+
+/* Chevron drawn with borders — no icon font, no image. */
+.chevron {
+  flex: 0 0 auto;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-right: 2px solid var(--text-tertiary);
+  border-bottom: 2px solid var(--text-tertiary);
+  transform: rotate(-45deg);
+  transition: transform 0.12s ease;
+}
+
+.details[open] .chevron {
+  transform: rotate(45deg);
+}
+
+.title {
+  font-size: 1rem;
+  font-weight: 400;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+.facts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin-left: 0.25rem;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.02em;
+  color: var(--text-tertiary);
+}
+
+.aside {
+  margin-left: auto;
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+.body {
+  padding: 0.25rem 1.1rem 1.25rem;
+  border-top: 1px solid var(--surface-subtle);
+}
