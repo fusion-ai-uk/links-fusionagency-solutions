@@ -496,14 +496,29 @@ curl http://localhost:3000/health
 2. Visit [http://localhost:3000/admin](http://localhost:3000/admin).
 3. Export: [http://localhost:3000/admin/export.csv](http://localhost:3000/admin/export.csv) (requires login cookie).
 
-The dashboard has two filters that also apply to the CSV export:
+### Dashboard controls
 
-- **Exclude likely bots** — drops rows flagged by the user-agent heuristic.
-  Off by default, so headline figures match what was reported historically.
-- **Include test sends** — adds `-test` campaign IDs. Off by default.
+Every figure-changing control sits in one bar that stays at the top of the page.
+Changes apply immediately (a thin line along the top of the bar shows while the
+figures update) and the address bar always reflects the current view, so any
+view can be bookmarked or sent to a colleague.
 
-`export.csv` accepts a repeated `campaign` parameter plus `bots=exclude`, so the
-download always matches what is on screen.
+- **Programme tabs** — pick the client programme.
+- **Email picker** — all emails in the programme, or tick one or several to
+  compare. Clicking an email's name in the table focuses on it; clicking again
+  clears it.
+- **Signal chips** — Genuine, Echo, Repeat, Internal, Bot, Pre-send, Test. Each
+  chip shows how many clicks of that kind exist in the selection; switching a
+  chip on or off changes every figure on the page. Presets: **All live**
+  (default), **Genuine only** (the figure to report), **Everything**.
+- **Settings** — the echo window (5/10/30/60s).
+- **CSV** — administrators only; every event in the selection with `phase`
+  and `triage` columns, regardless of chips.
+
+URL parameters: `programme`, `campaign` (repeatable), `include` (comma list
+of classes; absent means all live), `window`, `q`, `status`. The older
+`bots=exclude`, `tests=include` and `collapse=1` still work and convert to
+`include` on the next navigation.
 
 ---
 
@@ -669,6 +684,7 @@ src/
     event-filters.ts        # Shared WHERE builders
     duplication.ts          # Click clustering, echo/repeat labelling
     triage.ts               # Phase (test/pre-send/live) and reason per event
+    view.ts                 # Dashboard view model: signal classes and figures
     time.ts                 # UK-time formatting
     request-hints.ts        # Sec-Fetch capture and client_kind
     bot-detect.ts           # Bot patterns with reasons

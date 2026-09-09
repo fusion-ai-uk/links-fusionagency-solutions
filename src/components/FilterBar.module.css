@@ -1,0 +1,366 @@
+.bar {
+  position: relative;
+  padding: 0.75rem 1rem 0.65rem;
+  background: var(--surface-card);
+  border: 1px solid var(--border);
+  overflow: visible;
+}
+
+/* Thin progress line along the top edge while a change is applied. */
+.progress {
+  position: absolute;
+  top: -1px;
+  left: -1px;
+  right: -1px;
+  height: 2px;
+  background: linear-gradient(90deg, transparent 0%, var(--accent-cyan) 40%, var(--accent-cyan) 60%, transparent 100%);
+  background-size: 50% 100%;
+  animation: sweep 0.9s linear infinite;
+}
+
+@keyframes sweep {
+  from {
+    background-position: -100% 0;
+  }
+  to {
+    background-position: 200% 0;
+  }
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem 0.9rem;
+}
+
+.group {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.groupLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+}
+
+.divider {
+  width: 1px;
+  height: 1.7rem;
+  background: var(--surface-subtle);
+}
+
+/* ---- Wave picker ---------------------------------------------------------- */
+
+.picker {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 190px;
+  padding: 0.42rem 0.7rem;
+  background: var(--surface-well);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 0.84rem;
+  cursor: pointer;
+  text-align: left;
+}
+
+.picker span:first-child {
+  flex: 1 1 auto;
+}
+
+.picker:hover {
+  border-color: var(--accent-cyan);
+}
+
+.pickerActive {
+  border-color: var(--accent-cyan);
+}
+
+.picker:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 50;
+  min-width: 320px;
+  max-height: 360px;
+  overflow-y: auto;
+  padding: 0.35rem;
+  background: var(--surface-well);
+  border: 1px solid var(--border-soft);
+  border-top: var(--accent-bar) solid var(--accent-cyan);
+}
+
+.option {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  width: 100%;
+  padding: 0.5rem 0.6rem;
+  background: transparent;
+  border: 0;
+  color: var(--text-secondary);
+  font-family: var(--font-sans);
+  font-size: 0.86rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.option:hover {
+  background: var(--surface-raised);
+  color: var(--text-primary);
+}
+
+.optionOn {
+  color: var(--text-primary);
+}
+
+.optionBox {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1rem;
+  height: 1rem;
+  border: 1px solid var(--border);
+  background: var(--surface-card);
+  color: var(--accent-teal);
+}
+
+.optionOn .optionBox {
+  border-color: var(--accent-teal);
+}
+
+.optionLabel {
+  flex: 1 1 auto;
+}
+
+.optionMeta {
+  font-family: var(--font-mono);
+  font-size: 0.64rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-quaternary);
+}
+
+.optionDivider {
+  height: 1px;
+  margin: 0.25rem 0;
+  background: var(--surface-subtle);
+}
+
+.popoverHint {
+  padding: 0.55rem 0.6rem 0.35rem;
+  border-top: 1px solid var(--surface-subtle);
+  margin-top: 0.25rem;
+  font-size: 0.72rem;
+  line-height: 1.5;
+  color: var(--text-quaternary);
+}
+
+/* ---- Signal chips --------------------------------------------------------- */
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.28rem 0.6rem 0.28rem 0.5rem;
+  background: var(--surface-well);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text-tertiary);
+  font-family: var(--font-sans);
+  font-size: 0.78rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: border-color 0.1s ease, color 0.1s ease, background 0.1s ease;
+}
+
+.chip:hover {
+  border-color: var(--chip);
+  color: var(--text-secondary);
+}
+
+.chipOn {
+  background: var(--surface-raised);
+  border-color: var(--chip);
+  color: var(--text-primary);
+}
+
+.chipOn svg {
+  color: var(--chip);
+}
+
+.chipCount {
+  padding-left: 0.35rem;
+  border-left: 1px solid var(--border);
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  color: var(--text-tertiary);
+}
+
+.chipOn .chipCount {
+  color: var(--chip);
+}
+
+/* ---- Presets -------------------------------------------------------------- */
+
+.preset {
+  padding: 0.3rem 0.65rem;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  font-family: var(--font-sans);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.preset + .preset {
+  margin-left: -1px;
+}
+
+.preset:hover {
+  color: var(--text-primary);
+  border-color: var(--accent-cyan);
+  position: relative;
+  z-index: 1;
+}
+
+.presetOn {
+  background: var(--accent-teal);
+  border-color: var(--accent-teal);
+  color: var(--surface-bg);
+  position: relative;
+  z-index: 1;
+}
+
+/* ---- Right-hand actions --------------------------------------------------- */
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-left: auto;
+}
+
+.iconButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.38rem 0.65rem;
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  font-family: var(--font-sans);
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.iconButton:hover {
+  border-color: var(--accent-cyan);
+  color: var(--text-primary);
+}
+
+.iconButtonOn {
+  border-color: var(--accent-cyan);
+  color: var(--text-primary);
+}
+
+.iconButtonDisabled {
+  color: var(--text-quaternary);
+  border-color: var(--surface-subtle);
+  cursor: not-allowed;
+}
+
+/* ---- Advanced row --------------------------------------------------------- */
+
+.advanced {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem 0.9rem;
+  margin-top: 0.7rem;
+  padding: 0.6rem 0.75rem;
+  background: var(--surface-well);
+  border: 1px solid var(--border-soft);
+}
+
+.advancedLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+.segmented {
+  display: inline-flex;
+}
+
+.segment {
+  padding: 0.28rem 0.6rem;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  cursor: pointer;
+}
+
+.segment + .segment {
+  margin-left: -1px;
+}
+
+.segmentOn {
+  background: var(--surface-raised);
+  border-color: var(--accent-cyan);
+  color: var(--text-primary);
+  position: relative;
+  z-index: 1;
+}
+
+.advancedHint {
+  font-size: 0.76rem;
+  color: var(--text-quaternary);
+}
+
+/* ---- Summary line --------------------------------------------------------- */
+
+.summary {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0.6rem 0 0;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  line-height: 1.5;
+  color: var(--accent-orange);
+}

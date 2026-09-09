@@ -166,6 +166,18 @@ export const HELP = {
     ],
   },
 
+  signalFilters: {
+    label: "Choosing what counts",
+    short:
+      "Every event is one of seven kinds. The chips decide which kinds are counted in every figure on the page — totals, per email, per link, the recent list — so the numbers always agree with the chips.",
+    detail: [
+      "Genuine, Echo, Repeat, Internal and Bot are the five kinds of live event; Pre-send and Test are activity from before the send. The number on each chip is how many events of that kind exist in the current selection.",
+      "All live (the default) counts every live event, which matches what was reported before these controls existed. Genuine only is the figure to put in front of a client. Everything adds test and pre-send activity so a test can be checked.",
+      "Turning off Echo and Repeat is exactly what the old Collapse echoes toggle did. Turning off Bot is what Exclude likely bots did. The chips replace both, and can be combined freely.",
+      "Changes apply as soon as a chip is clicked; the thin line along the top of the bar shows while the figures update. The address bar always reflects the current choice, so a view can be bookmarked or sent to a colleague.",
+    ],
+  },
+
   preSend: {
     label: "What counts as a test",
     short:
@@ -298,6 +310,7 @@ export type HelpId = keyof typeof HELP;
 export const GUIDE_ORDER: HelpId[] = [
   "programme",
   "campaignId",
+  "signalFilters",
   "status",
   "trackedCtas",
   "totalOpens",

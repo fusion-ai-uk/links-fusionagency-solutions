@@ -65,7 +65,9 @@ export interface ResolvedScope {
   isAllProgrammes: boolean;
   /** Campaign IDs in this programme (live only, in registry order). */
   programmeCampaignIds: string[];
-  /** Selected single campaign, or null for the whole programme. */
+  /** Selected campaigns (any number); empty means the whole programme. */
+  selectedCampaignIds: string[];
+  /** First selected campaign, or null — for pages that focus on one. */
   selectedCampaignId: string | null;
   /** IDs to hand to the stats layer, honouring the test-data toggle. */
   filterCampaignIds: string[];
@@ -127,11 +129,17 @@ export function buildProgrammeNav(dbCampaignIds: string[]): ProgrammeNavItem[] {
 /** Work out what the current query string means in terms of campaign IDs. */
 export function resolveScope(options: {
   programmeId?: string;
-  campaignId?: string;
+  /** One campaign, or several (repeated `campaign` query parameter). */
+  campaignId?: string | string[];
   dbCampaignIds: string[];
   includeTests: boolean;
 }): ResolvedScope {
-  const { campaignId, dbCampaignIds, includeTests } = options;
+  const { dbCampaignIds, includeTests } = options;
+  const requestedIds = Array.isArray(options.campaignId)
+    ? options.campaignId
+    : options.campaignId
+      ? [options.campaignId]
+      : [];
   const programmeId = options.programmeId || ALL_PROGRAMMES_ID;
 
   const isUnassigned = programmeId === UNASSIGNED_PROGRAMME_ID;
@@ -149,15 +157,14 @@ export function resolveScope(options: {
     programmeCampaignIds = programme!.campaigns.map((campaign) => campaign.id);
   }
 
-  // Ignore a campaign filter that does not belong to the selected programme.
-  const selectedCampaignId =
-    campaignId && campaignId !== ALL_PROGRAMMES_ID && programmeCampaignIds.includes(campaignId)
-      ? campaignId
-      : null;
+  // Ignore any requested campaign that does not belong to the selected programme.
+  const selectedCampaignIds = programmeCampaignIds.filter(
+    (id) => requestedIds.includes(id) && id !== ALL_PROGRAMMES_ID
+  );
+  const selectedCampaignId = selectedCampaignIds[0] ?? null;
 
-  const baseIds = selectedCampaignId
-    ? [selectedCampaignId]
-    : programmeCampaignIds;
+  const baseIds =
+    selectedCampaignIds.length > 0 ? selectedCampaignIds : programmeCampaignIds;
 
   return {
     programmeId: programme?.id ?? (isUnassigned ? UNASSIGNED_PROGRAMME_ID : ALL_PROGRAMMES_ID),
@@ -165,6 +172,7 @@ export function resolveScope(options: {
     isUnassigned,
     isAllProgrammes: isAllProgrammes || (!programme && !isUnassigned),
     programmeCampaignIds,
+    selectedCampaignIds,
     selectedCampaignId,
     filterCampaignIds: withTestTwins(baseIds, includeTests),
     liveWindows: includeTests ? [] : getLiveWindows(baseIds),

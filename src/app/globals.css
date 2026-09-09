@@ -168,3 +168,24 @@ pre code {
   margin: 1.5rem 0;
   background: var(--surface-subtle);
 }
+
+/* ---------------------------------------------------------------------------
+   Loading state: while a filter change is in flight, results dim and stop
+   accepting clicks, so stale numbers are never mistaken for fresh ones.
+   --------------------------------------------------------------------------- */
+[data-loading] .results {
+  opacity: 0.55;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+}
+
+.results {
+  transition: opacity 0.15s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .results,
+  [data-loading] .results {
+    transition: none;
+  }
+}

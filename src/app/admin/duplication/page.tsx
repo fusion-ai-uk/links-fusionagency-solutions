@@ -5,14 +5,15 @@ import { getAllCampaignIdsInDb } from "@/lib/dashboard";
 import {
   clusterClicks,
   ECHO_WINDOW_OPTIONS,
-  loadClickClusters,
   parseEchoWindow,
   shortUserAgent,
   summariseClusters,
   type ClickCluster,
   type ClickEvent,
   type ClusterRole,
+  type DuplicationSummary,
 } from "@/lib/duplication";
+import { loadTriage } from "@/lib/triage";
 import { CLIENT_KIND_LABELS } from "@/lib/request-hints";
 import { BOT_REASON_LABELS } from "@/lib/bot-detect";
 import {
@@ -30,7 +31,8 @@ export const runtime = "nodejs";
 
 type SearchParams = {
   programme?: string;
-  campaign?: string;
+  /** May repeat when several emails are selected on the dashboard. */
+  campaign?: string | string[];
   bots?: string;
   tests?: string;
   window?: string;
@@ -62,7 +64,9 @@ function dashboardHref(params: SearchParams, collapse: boolean): string {
   if (params.programme && params.programme !== ALL_PROGRAMMES_ID) {
     search.set("programme", params.programme);
   }
-  if (params.campaign) search.set("campaign", params.campaign);
+  for (const id of Array.isArray(params.campaign) ? params.campaign : params.campaign ? [params.campaign] : []) {
+    search.append("campaign", id);
+  }
   if (params.bots === "exclude") search.set("bots", "exclude");
   if (params.tests === "include") search.set("tests", "include");
   if (params.window) search.set("window", params.window);
@@ -86,6 +90,12 @@ export default async function DuplicationPage({ searchParams }: PageProps) {
   let scopeLabel = "All programmes";
   let dbError: string | null = null;
   let scopeCampaignIds: string[] = [];
+  // Live clicks set aside before clustering, so the page agrees with the
+  // dashboard's triage: a bot is a bot first, an internal device is internal.
+  let liveClicks = 0;
+  let botClicks = 0;
+  let internalClicks = 0;
+  let clusterable: ClickEvent[] = [];
 
   try {
     const dbCampaignIds = await getAllCampaignIdsInDb();
@@ -105,26 +115,41 @@ export default async function DuplicationPage({ searchParams }: PageProps) {
           ? "Unassigned campaign IDs"
           : "All programmes";
 
-    clusters = await loadClickClusters(
-      {
-        campaignIds: scope.filterCampaignIds,
-        excludeBots,
-        liveWindows: scope.liveWindows,
-      },
+    // Same classification as the dashboard: triage first, then cluster only
+    // the live clicks that are neither bot nor internal.
+    const tri = await loadTriage(
+      scope.selectedCampaignIds.length > 0 ? scope.selectedCampaignIds : scope.programmeCampaignIds,
       windowSeconds
     );
+    liveClicks = tri.clicks.live;
+    botClicks = tri.clicks.bot;
+    internalClicks = tri.clicks.internal;
+    clusterable = tri.events
+      .filter((e) => {
+        if (e.eventType !== "click" || !e.linkId) return false;
+        const reason = tri.byId.get(e.id)?.reason;
+        return reason === "genuine" || reason === "echo" || reason === "repeat";
+      })
+      .map((e) => ({ ...e, campaignId: e.campaignId ?? "unknown", linkId: e.linkId as string }));
+    clusters = clusterClicks(clusterable, windowSeconds);
   } catch (error) {
     dbError = error instanceof Error ? error.message : String(error);
     console.error("[admin/duplication] query failed:", error);
   }
 
-  const summary = summariseClusters(clusters, windowSeconds);
+  // Totals are expressed against all live clicks, so "collapsed" here equals
+  // the dashboard with the Echo and Repeat chips switched off.
+  const withLiveTotals = (s: DuplicationSummary): DuplicationSummary => ({
+    ...s,
+    totalClicks: liveClicks,
+    collapsedClicks: liveClicks - s.echoEvents - s.repeatEvents,
+  });
+  const summary = withLiveTotals(summariseClusters(clusters, windowSeconds));
 
   // What each window setting would do to the same clicks.
-  const allEvents: ClickEvent[] = clusters.flatMap((c) => c.events);
   const byWindow = ECHO_WINDOW_OPTIONS.map((seconds) => ({
     seconds,
-    summary: summariseClusters(clusterClicks(allEvents, seconds), seconds),
+    summary: withLiveTotals(summariseClusters(clusterClicks(clusterable, seconds), seconds)),
   }));
 
   const evidence = clusters
@@ -133,7 +158,7 @@ export default async function DuplicationPage({ searchParams }: PageProps) {
   const shown = evidence.slice(0, MAX_CLUSTERS_SHOWN);
 
   const multiCampaign = new Set(clusters.map((c) => c.campaignId)).size > 1;
-  const hasHintData = allEvents.some((e) => e.clientKind !== null);
+  const hasHintData = clusterable.some((e) => e.clientKind !== null);
 
   return (
     <div className={styles.page}>
@@ -188,9 +213,9 @@ export default async function DuplicationPage({ searchParams }: PageProps) {
         {params.programme && (
           <input type="hidden" name="programme" value={params.programme} />
         )}
-        {params.campaign && (
-          <input type="hidden" name="campaign" value={params.campaign} />
-        )}
+        {(Array.isArray(params.campaign) ? params.campaign : params.campaign ? [params.campaign] : []).map((id) => (
+          <input key={id} type="hidden" name="campaign" value={id} />
+        ))}
         {excludeBots && <input type="hidden" name="bots" value="exclude" />}
         {includeTests && <input type="hidden" name="tests" value="include" />}
         <div className={styles.filterRow}>
@@ -214,7 +239,7 @@ export default async function DuplicationPage({ searchParams }: PageProps) {
           </div>
         </div>
         <p className={styles.filterSummary}>
-          {`// scope: ${scopeLabel} · ${scopeCampaignIds.length} campaign ID${scopeCampaignIds.length === 1 ? "" : "s"} · ${excludeBots ? "likely bots excluded" : "bots included"} · ${includeTests ? "test sends included" : "test sends hidden"} · window ${windowSeconds}s`}
+          {`// scope: ${scopeLabel} · ${scopeCampaignIds.length} campaign ID${scopeCampaignIds.length === 1 ? "" : "s"} · live clicks only · ${botClicks} bot and ${internalClicks} internal set aside before clustering · window ${windowSeconds}s`}
         </p>
       </form>
 
@@ -230,7 +255,9 @@ export default async function DuplicationPage({ searchParams }: PageProps) {
           <span className={styles.statValue}>
             {summary.totalClicks.toLocaleString("en-GB")}
           </span>
-          <span className={styles.statHint}>Every click event in scope.</span>
+          <span className={styles.statHint}>
+            Live clicks in scope — test and pre-send excluded. Matches the dashboard&rsquo;s All live.
+          </span>
         </div>
         <div
           className={styles.statCard}
@@ -244,10 +271,9 @@ export default async function DuplicationPage({ searchParams }: PageProps) {
             {summary.collapsedClicks.toLocaleString("en-GB")}
           </span>
           <span className={styles.statHint}>
-            One per cluster.{" "}
-            {summary.totalClicks - summary.collapsedClicks} removed (
+            {summary.totalClicks - summary.collapsedClicks} echo{summary.totalClicks - summary.collapsedClicks === 1 ? "" : "es"} and repeat{summary.totalClicks - summary.collapsedClicks === 1 ? "" : "s"} removed (
             {pct(summary.totalClicks - summary.collapsedClicks, summary.totalClicks)}
-            ).
+            ). Matches the dashboard with Echo and Repeat switched off.
           </span>
         </div>
         <div
@@ -476,10 +502,12 @@ export default async function DuplicationPage({ searchParams }: PageProps) {
           </div>
         )}
         <p className={styles.sourceLine}>
-          Primary is chosen by: not flagged as a bot, then a browser navigation,
-          then the country most of this campaign&rsquo;s browser clicks came
-          from, then the later event (scanners tend to fetch first). Echo means
-          a different address to the primary; repeat means the same one.
+          Bot and internal clicks are set aside before clustering, exactly as on
+          the dashboard — a bot is a bot first. Among the rest, the primary is
+          chosen by: a browser navigation, then the country most of this
+          campaign&rsquo;s browser clicks came from, then the later event
+          (scanners tend to fetch first). Echo means a different address to the
+          primary; repeat means the same one.
         </p>
       </section>
 
