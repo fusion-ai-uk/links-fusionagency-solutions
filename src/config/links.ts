@@ -14,6 +14,8 @@ const BMJ_LYVDELZI = "https://hosted.bmj.com/gilead-lyvdelzi";
 const BMJ_LYVDELZI_BIOCHEMICAL =
   "https://hosted.bmj.com/gilead-lyvdelzi#biochemical-levels";
 const BMJ_AIDS_2026 = "https://hosted.bmj.com/gilead-aids2026";
+const TOUCH_ID_COVID_WEBINAR =
+  "https://touchinfectiousdiseases.com/covid-19/learning-zone/evolving-management-of-covid-19-in-hospitalised-patients-evidence-experience-and-practice/?video_id=liwhmie1y0";
 
 /**
  * Legacy fallback aliases, kept only for link IDs that may already be live in
@@ -44,6 +46,22 @@ export const campaignLinkDestinations: Record<string, LinkDestinationMap> = {
   "gilead-ambisome-email-3": {},
   "gilead-ambisome-email-4": {},
   "gilead-ambisome-email-5": {},
+
+  // --- Gilead Veklury (via IMI) -------------------------------------------
+  // Email 1 (build file wave_4b): three image CTAs, all to the same webinar
+  // page, given separate IDs so placement performance is visible.
+  "gilead-veklury-email-1": {
+    // Webinar screenshot with play button, top of the email
+    "watch-webinar": TOUCH_ID_COVID_WEBINAR,
+    // Left-hand speaker headshot
+    "speaker-left": TOUCH_ID_COVID_WEBINAR,
+    // Right-hand speaker headshot
+    "speaker-right": TOUCH_ID_COVID_WEBINAR,
+  },
+  "gilead-veklury-email-2": {},
+  "gilead-veklury-email-3": {},
+  "gilead-veklury-email-4": {},
+  "gilead-veklury-email-5": {},
 
   // --- IMI / Gilead Lyvdelzi ----------------------------------------------
   "imi-lyvdelzi-may-2026": {

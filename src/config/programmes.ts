@@ -107,6 +107,54 @@ export const PROGRAMMES: Programme[] = [
     ],
   },
   {
+    id: "gilead-veklury",
+    label: "Gilead Veklury",
+    client: "IMI",
+    brand: "Veklury",
+    description:
+      "Five-email programme sent via IMI, set up with Steve and Bryony. " +
+      "Campaign-level only — no recipient IDs or merge tags. Email 1 is the " +
+      "COVID-19 webinar email (build file wave_4b).",
+    campaigns: [
+      {
+        id: "gilead-veklury-email-1",
+        label: "Veklury Email 1 (wave 4b)",
+        status: "ready",
+        sendDate: "September 2026",
+        notes:
+          "COVID-19 in clinical practice webinar. Three image CTAs to the same touchinfectiousdiseases.com page.",
+      },
+      {
+        id: "gilead-veklury-email-2",
+        label: "Veklury Email 2",
+        status: "planned",
+        sendDate: null,
+        notes: "Awaiting HTML and destination URLs.",
+      },
+      {
+        id: "gilead-veklury-email-3",
+        label: "Veklury Email 3",
+        status: "planned",
+        sendDate: null,
+        notes: "Awaiting HTML and destination URLs.",
+      },
+      {
+        id: "gilead-veklury-email-4",
+        label: "Veklury Email 4",
+        status: "planned",
+        sendDate: null,
+        notes: "Awaiting HTML and destination URLs.",
+      },
+      {
+        id: "gilead-veklury-email-5",
+        label: "Veklury Email 5",
+        status: "planned",
+        sendDate: null,
+        notes: "Awaiting HTML and destination URLs.",
+      },
+    ],
+  },
+  {
     id: "imi-aids2026",
     label: "IMI — Gilead AIDS 2026",
     client: "IMI",
