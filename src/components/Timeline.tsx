@@ -340,8 +340,8 @@ function Chart({
 }) {
   const ticks = [0, 0.2, 0.4, 0.6, 0.8, 1];
   const count = g.buckets.length;
-  // Label density: never more than ~12 labels, and in hour view prefer 6-hour marks.
-  const every = series.grain === "hour" ? 6 : Math.max(1, Math.ceil(count / 12));
+  // Label density in day view: never more than ~12 labels.
+  const every = Math.max(1, Math.ceil(count / 12));
   const sendIndex = g.buckets.findIndex((b) => b.isSend);
   let sendX: number | null = null;
   if (sendIndex >= 0 && data.send) {
@@ -431,7 +431,8 @@ function Chart({
       {/* X axis */}
       <line className={styles.grid} x1={MARGIN.left} x2={width - MARGIN.right} y1={g.plotBottom} y2={g.plotBottom} />
       {g.buckets.map((b, i) => {
-        const show = i % every === 0 || (series.grain === "hour" && b.label === "00:00");
+        // Hour view labels the clock at 00/06/12/18 only, so neighbours never collide.
+        const show = series.grain === "hour" ? Number(b.label.slice(0, 2)) % 6 === 0 : i % every === 0;
         if (!show) return null;
         const x = g.x(i) + g.step / 2;
         const midnight = series.grain === "hour" && b.label === "00:00";
