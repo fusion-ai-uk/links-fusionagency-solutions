@@ -55,6 +55,9 @@ export default function Timeline({ data, options, selectedId, range, hrefBase }:
   const [width, setWidth] = useState(960);
   const areaRef = useRef<HTMLDivElement>(null);
   const drag = useRef<{ index: number; x: number; moved: boolean } | null>(null);
+  // Mirror of `brush` for the mouseup handler: a fast flick can finish before
+  // React has re-rendered with the last mousemove's state.
+  const brushRef = useRef<{ start: number; end: number } | null>(null);
 
   // Remembered grain, applied after hydration so server and client agree.
   useEffect(() => {
@@ -133,20 +136,22 @@ export default function Timeline({ data, options, selectedId, range, hrefBase }:
     setHover(i);
     if (drag.current && i !== null) {
       if (Math.abs(event.clientX - drag.current.x) > 4 || i !== drag.current.index) drag.current.moved = true;
-      if (drag.current.moved) setBrush({ start: drag.current.index, end: i });
+      if (drag.current.moved) {
+        brushRef.current = { start: drag.current.index, end: i };
+        setBrush(brushRef.current);
+      }
     }
   }
 
   function endDrag() {
     const d = drag.current;
+    const b = brushRef.current;
     drag.current = null;
-    if (!d || !brush || !geometry) {
-      setBrush(null);
-      return;
-    }
-    const lo = Math.min(brush.start, brush.end);
-    const hi = Math.max(brush.start, brush.end);
+    brushRef.current = null;
     setBrush(null);
+    if (!d || !b || !geometry) return;
+    const lo = Math.min(b.start, b.end);
+    const hi = Math.max(b.start, b.end);
     navigateRange(geometry.buckets[lo].rangeFrom, geometry.buckets[hi].rangeTo);
   }
 
