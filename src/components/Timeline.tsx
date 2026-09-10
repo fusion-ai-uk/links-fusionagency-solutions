@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import Icon from "@/components/Icon";
-import { niceMax, type Grain, type TimelineBucket, type TimelineData, type TimelineSeries } from "@/lib/timeline";
+import InfoTip from "@/components/InfoTip";
+import { niceMax, type Grain, type RangePreset, type TimelineBucket, type TimelineData, type TimelineSeries } from "@/lib/timeline";
 import styles from "./Timeline.module.css";
 
 export interface TimelineOption {
@@ -12,10 +13,19 @@ export interface TimelineOption {
   href: string;
 }
 
+export interface TimelineRange {
+  from: string | null;
+  to: string | null;
+}
+
 type TimelineProps = {
   data: TimelineData | null;
   options: TimelineOption[];
   selectedId: string | null;
+  /** The active time range, if any (ISO instants). */
+  range: TimelineRange | null;
+  /** Search string of the current view without `from`/`to`. */
+  hrefBase: string;
 };
 
 const HEIGHT = 300;
@@ -27,18 +37,24 @@ const n = (value: number) => value.toLocaleString("en-GB");
  * Opens (bars, left axis) and clicks (line, right axis) for one email, by UK
  * day or by hour, with the send moment and any later bursts marked.
  *
+ * Drag across the bars to set the time range for the whole page; the presets
+ * do the same in one click. Bars outside the range stay visible but dimmed.
+ *
  * Drawn as plain SVG sized to the container, so text stays crisp at any width
- * and there is no chart library to load. Switching email is a navigation (the
- * server prepares the series); switching grain is instant.
+ * and there is no chart library to load. Switching email or range is a
+ * navigation (the server prepares the figures); switching grain is instant.
  */
-export default function Timeline({ data, options, selectedId }: TimelineProps) {
+export default function Timeline({ data, options, selectedId, range, hrefBase }: TimelineProps) {
   const router = useRouter();
+  const pathname = usePathname();
   const [pending, startTransition] = useTransition();
   const [grain, setGrain] = useState<Grain>("day");
   const [showTable, setShowTable] = useState(false);
   const [hover, setHover] = useState<number | null>(null);
+  const [brush, setBrush] = useState<{ start: number; end: number } | null>(null);
   const [width, setWidth] = useState(960);
   const areaRef = useRef<HTMLDivElement>(null);
+  const drag = useRef<{ index: number; x: number; moved: boolean } | null>(null);
 
   // Remembered grain, applied after hydration so server and client agree.
   useEffect(() => {
@@ -83,6 +99,16 @@ export default function Timeline({ data, options, selectedId }: TimelineProps) {
     startTransition(() => router.push(option.href, { scroll: false }));
   }
 
+  function navigateRange(from: string | null, to: string | null) {
+    const search = new URLSearchParams(hrefBase);
+    search.delete("from");
+    search.delete("to");
+    if (from) search.set("from", from);
+    if (to) search.set("to", to);
+    const query = search.toString();
+    startTransition(() => router.push(query ? `${pathname}?${query}` : pathname, { scroll: false }));
+  }
+
   const series: TimelineSeries | null = data ? (grain === "day" ? data.day : data.hour) : null;
   const geometry = useMemo(() => (series ? layout(series, width) : null), [series, width]);
 
@@ -95,7 +121,37 @@ export default function Timeline({ data, options, selectedId }: TimelineProps) {
     return Math.min(geometry.buckets.length - 1, Math.max(0, i));
   }
 
+  function onMouseDown(event: React.MouseEvent) {
+    if (event.button !== 0) return;
+    const i = bucketAt(event.clientX);
+    if (i === null) return;
+    drag.current = { index: i, x: event.clientX, moved: false };
+  }
+
+  function onMouseMove(event: React.MouseEvent) {
+    const i = bucketAt(event.clientX);
+    setHover(i);
+    if (drag.current && i !== null) {
+      if (Math.abs(event.clientX - drag.current.x) > 4 || i !== drag.current.index) drag.current.moved = true;
+      if (drag.current.moved) setBrush({ start: drag.current.index, end: i });
+    }
+  }
+
+  function endDrag() {
+    const d = drag.current;
+    drag.current = null;
+    if (!d || !brush || !geometry) {
+      setBrush(null);
+      return;
+    }
+    const lo = Math.min(brush.start, brush.end);
+    const hi = Math.max(brush.start, brush.end);
+    setBrush(null);
+    navigateRange(geometry.buckets[lo].rangeFrom, geometry.buckets[hi].rangeTo);
+  }
+
   const hovered = hover !== null && geometry ? geometry.buckets[hover] : null;
+  const activePreset = (p: RangePreset) => range?.from === p.from && range?.to === p.to;
 
   return (
     <div className={styles.wrap} aria-busy={pending}>
@@ -141,6 +197,34 @@ export default function Timeline({ data, options, selectedId }: TimelineProps) {
           </div>
         </div>
 
+        {data && (data.presets.length > 0 || range) && (
+          <div className={styles.group} role="group" aria-label="Time range">
+            <span className={styles.groupLabel}>
+              <Icon name="clock" /> Range
+            </span>
+            <div className={styles.segmented}>
+              {data.presets.map((p) => (
+                <button
+                  key={p.label}
+                  type="button"
+                  className={`${styles.segment} ${activePreset(p) ? styles.segmentOn : ""}`}
+                  aria-pressed={activePreset(p)}
+                  onClick={() => (activePreset(p) ? navigateRange(null, null) : navigateRange(p.from, p.to))}
+                  title="Count only this window, everywhere on the page"
+                >
+                  {p.label}
+                </button>
+              ))}
+              {range && (
+                <button type="button" className={styles.segment} onClick={() => navigateRange(null, null)} title="Remove the time range">
+                  <Icon name="close" size={11} /> Clear
+                </button>
+              )}
+            </div>
+            <InfoTip topic="timeRange" />
+          </div>
+        )}
+
         <div className={styles.legend} aria-label="Legend">
           <span className={styles.legendItem}>
             <span className={styles.swatchBar} /> Opens · left axis
@@ -162,14 +246,20 @@ export default function Timeline({ data, options, selectedId }: TimelineProps) {
 
       <div
         ref={areaRef}
-        className={styles.chartArea}
-        onMouseMove={(event) => setHover(bucketAt(event.clientX))}
-        onMouseLeave={() => setHover(null)}
+        className={`${styles.chartArea} ${brush ? styles.chartAreaBrushing : ""}`}
+        onMouseDown={onMouseDown}
+        onMouseMove={onMouseMove}
+        onMouseUp={endDrag}
+        onMouseLeave={() => {
+          setHover(null);
+          if (drag.current) endDrag();
+        }}
         onTouchStart={(event) => setHover(bucketAt(event.touches[0].clientX))}
         onTouchMove={(event) => setHover(bucketAt(event.touches[0].clientX))}
+        title={geometry && geometry.buckets.length > 0 ? "Drag across the bars to set a time range" : undefined}
       >
         {geometry && series && series.buckets.length > 0 ? (
-          <Chart series={series} geometry={geometry} width={width} hover={hover} data={data!} />
+          <Chart series={series} geometry={geometry} width={width} hover={hover} brush={brush} range={range} data={data!} />
         ) : (
           <div className={styles.empty}>
             {data ? (
@@ -183,7 +273,7 @@ export default function Timeline({ data, options, selectedId }: TimelineProps) {
           </div>
         )}
 
-        {hovered && geometry && (
+        {hovered && geometry && !brush && (
           <div
             className={styles.tooltip}
             style={{
@@ -212,6 +302,12 @@ export default function Timeline({ data, options, selectedId }: TimelineProps) {
                 a mail provider pre-fetching images.
               </span>
             )}
+            {range && !inRange(hovered, range) && <span className={styles.tooltipNote}>Outside the time range — not counted.</span>}
+          </div>
+        )}
+        {brush && geometry && (
+          <div className={styles.brushHint} role="status">
+            {geometry.buckets[Math.min(brush.start, brush.end)].title} → {geometry.buckets[Math.max(brush.start, brush.end)].title}
           </div>
         )}
       </div>
@@ -267,13 +363,14 @@ export default function Timeline({ data, options, selectedId }: TimelineProps) {
             </thead>
             <tbody>
               {series.buckets.map((b) => (
-                <tr key={b.key} className={b.isSend ? styles.rowSend : undefined}>
+                <tr key={b.key} className={b.isSend ? styles.rowSend : undefined} style={range && !inRange(b, range) ? { opacity: 0.5 } : undefined}>
                   <td>{b.title}</td>
                   <td className={styles.numeric}>{n(b.opens)}</td>
                   <td className={styles.numeric}>{n(b.clicks)}</td>
                   <td>
                     {b.isSend && (data?.send?.source === "config" ? "Send" : "Send detected")}
                     {b.burst !== null && `Burst · ${n(b.burst)} opens`}
+                    {range && !inRange(b, range) && (b.isSend || b.burst !== null ? " · " : "") + "outside range"}
                   </td>
                 </tr>
               ))}
@@ -283,6 +380,13 @@ export default function Timeline({ data, options, selectedId }: TimelineProps) {
       )}
     </div>
   );
+}
+
+/** True when any part of the bucket falls inside the (half-open) range. */
+function inRange(b: TimelineBucket, range: TimelineRange): boolean {
+  if (range.from && b.rangeTo <= range.from) return false;
+  if (range.to && b.rangeFrom >= range.to) return false;
+  return true;
 }
 
 /* ---- Geometry ------------------------------------------------------------ */
@@ -330,12 +434,16 @@ function Chart({
   geometry: g,
   width,
   hover,
+  brush,
+  range,
   data,
 }: {
   series: TimelineSeries;
   geometry: Geometry;
   width: number;
   hover: number | null;
+  brush: { start: number; end: number } | null;
+  range: TimelineRange | null;
   data: TimelineData;
 }) {
   const ticks = [0, 0.2, 0.4, 0.6, 0.8, 1];
@@ -358,6 +466,10 @@ function Chart({
     : "";
   const clickPoints = g.buckets.map((b, i) => `${g.x(i) + g.step / 2},${g.yClicks(b.clicks)}`).join(" ");
   const anyClicks = g.buckets.some((b) => b.clicks > 0);
+  const inActiveRange = (b: TimelineBucket) => !range || inRange(b, range);
+  // Contiguous run of buckets inside the range, for the shading either side.
+  const firstIn = range ? g.buckets.findIndex(inActiveRange) : -1;
+  const lastIn = range ? g.buckets.length - 1 - [...g.buckets].reverse().findIndex(inActiveRange) : -1;
 
   return (
     <svg className={styles.svg} viewBox={`0 0 ${width} ${HEIGHT}`} role="img" aria-label={`Opens and clicks by ${series.grain} for ${data.label}`}>
@@ -365,6 +477,18 @@ function Chart({
       {sendX !== null && sendX > MARGIN.left && (
         <rect className={styles.presend} x={MARGIN.left} y={g.plotTop} width={sendX - MARGIN.left} height={g.plotHeight} />
       )}
+
+      {/* Outside the active time range */}
+      {range && firstIn >= 0 && (
+        <>
+          {firstIn > 0 && <rect className={styles.outside} x={MARGIN.left} y={g.plotTop} width={g.x(firstIn) - MARGIN.left} height={g.plotHeight} />}
+          {lastIn < g.buckets.length - 1 && (
+            <rect className={styles.outside} x={g.x(lastIn + 1)} y={g.plotTop} width={width - MARGIN.right - g.x(lastIn + 1)} height={g.plotHeight} />
+          )}
+          <rect className={styles.rangeEdge} x={g.x(firstIn)} y={g.plotTop} width={g.x(lastIn + 1) - g.x(firstIn)} height={g.plotHeight} />
+        </>
+      )}
+      {range && firstIn < 0 && <rect className={styles.outside} x={MARGIN.left} y={g.plotTop} width={width - MARGIN.left - MARGIN.right} height={g.plotHeight} />}
 
       {/* Grid and axes */}
       {ticks.map((t) => {
@@ -382,14 +506,25 @@ function Chart({
         );
       })}
 
-      {/* Hover band */}
-      {hover !== null && <rect className={styles.hover} x={g.x(hover)} y={g.plotTop} width={g.step} height={g.plotHeight} />}
+      {/* Hover band or brush */}
+      {brush ? (
+        <rect
+          className={styles.brush}
+          x={g.x(Math.min(brush.start, brush.end))}
+          y={g.plotTop}
+          width={g.step * (Math.abs(brush.end - brush.start) + 1)}
+          height={g.plotHeight}
+        />
+      ) : (
+        hover !== null && <rect className={styles.hover} x={g.x(hover)} y={g.plotTop} width={g.step} height={g.plotHeight} />
+      )}
 
       {/* Opens bars */}
       {g.buckets.map((b, i) => {
         const h = g.plotBottom - g.yOpens(b.opens);
         if (h <= 0) return null;
-        const cls = hover === null ? styles.bar : hover === i ? `${styles.bar} ${styles.barHot}` : `${styles.bar} ${styles.barDim}`;
+        const dim = (hover !== null && hover !== i && !brush) || !inActiveRange(b);
+        const cls = `${styles.bar} ${hover === i ? styles.barHot : dim ? styles.barDim : ""}`;
         return <rect key={b.key} className={cls} x={g.x(i) + (g.step - g.barWidth) / 2} y={g.yOpens(b.opens)} width={g.barWidth} height={h} />;
       })}
 

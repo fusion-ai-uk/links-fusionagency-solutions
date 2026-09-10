@@ -10,12 +10,14 @@ import { buildEventWhere, CSV_HEADERS, eventToCsvRow, escapeCsvField } from "@/l
 import { parseEchoWindow } from "@/lib/duplication";
 import { assessEvents } from "@/lib/confidence";
 import { baseCampaignId, getTestCampaignId } from "@/config/programmes";
+import { parseCountries } from "@/lib/geo-names";
+import { parseRange } from "@/lib/view";
 
 export const runtime = "nodejs";
 
 /**
  * Export email events as CSV (admin only).
- * GET /admin/export.csv?campaign=<cid>&campaign=<cid>&bots=exclude&window=10
+ * GET /admin/export.csv?campaign=<cid>&campaign=<cid>&country=GB,IE&from=<iso>&to=<iso>&window=10
  *
  * `campaign` may be repeated so the export matches the dashboard's programme
  * scope. Omit it to export everything. Every row carries two computed
@@ -42,6 +44,8 @@ export async function GET(request: NextRequest) {
     .map((value) => value.trim())
     .filter((value) => value.length > 0 && value !== "all");
   const excludeBots = search.get("bots") === "exclude";
+  const countries = parseCountries(search.get("country") ?? undefined);
+  const range = parseRange({ from: search.get("from") ?? undefined, to: search.get("to") ?? undefined });
   const windowSeconds = parseEchoWindow(search.get("window") ?? undefined);
 
   // Always include each campaign's test twin: the assessment needs it to learn which
@@ -56,7 +60,7 @@ export async function GET(request: NextRequest) {
       : null;
 
   const events = await prisma.emailEvent.findMany({
-    where: buildEventWhere({ campaignIds, excludeBots }),
+    where: buildEventWhere({ campaignIds, excludeBots, countries, range }),
     orderBy: { createdAt: "desc" },
   });
 

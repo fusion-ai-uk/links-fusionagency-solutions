@@ -16,6 +16,10 @@ export interface DashboardFilters {
    * (not sent yet). Rows on campaigns without a window are untouched.
    */
   liveWindows?: LiveWindow[];
+  /** Country codes (ISO alpha-2) and/or "unknown" for rows with no country. */
+  countries?: string[] | null;
+  /** Half-open time window [from, to). */
+  range?: { from: Date | null; to: Date | null } | null;
 }
 
 function includesUnknown(campaignIds: string[]): boolean {
@@ -41,6 +45,22 @@ export function buildEventWhere(
 
   if (excludeBots) {
     where.isBot = false;
+  }
+
+  if (filters.countries && filters.countries.length > 0) {
+    const codes = filters.countries.filter((c) => c !== "unknown");
+    const wantUnknown = filters.countries.includes("unknown");
+    const clauses: Prisma.EmailEventWhereInput[] = [];
+    if (codes.length > 0) clauses.push({ ipCountry: { in: codes } });
+    if (wantUnknown) clauses.push({ ipCountry: null }, { ipCountry: "" });
+    where.AND = [...(Array.isArray(where.AND) ? where.AND : where.AND ? [where.AND] : []), { OR: clauses }];
+  }
+
+  if (filters.range && (filters.range.from || filters.range.to)) {
+    where.createdAt = {
+      ...(filters.range.from ? { gte: filters.range.from } : {}),
+      ...(filters.range.to ? { lt: filters.range.to } : {}),
+    };
   }
 
   if (liveWindows && liveWindows.length > 0) {

@@ -21,6 +21,21 @@ export interface WaveOption {
   statusLabel: string | null;
 }
 
+export interface CountryOption {
+  /** ISO alpha-2 or "unknown". */
+  code: string;
+  label: string;
+  opens: number;
+  clicks: number;
+}
+
+export interface ActiveRange {
+  from: string | null;
+  to: string | null;
+  /** Human label, e.g. "10 Sep 11:04 → 13 Sep 11:04". */
+  label: string;
+}
+
 type FilterBarProps = {
   /** Programme in scope, or "all"/"unassigned". Carried through untouched. */
   programme?: string;
@@ -29,6 +44,11 @@ type FilterBarProps = {
   selected: string[];
   classes: EventClass[];
   classCounts: Record<EventClass, ClassCount>;
+  /** Countries with activity in the selection, busiest first. */
+  countryOptions: CountryOption[];
+  /** Selected country codes (or "unknown"); empty means everywhere. */
+  countries: string[];
+  range: ActiveRange | null;
   windowSeconds: number;
   windowOptions: readonly number[];
   /** The email shown on the timeline, carried through untouched. */
@@ -52,8 +72,11 @@ export default function FilterBar(props: FilterBarProps) {
   const pathname = usePathname();
   const [pending, startTransition] = useTransition();
   const [waveOpen, setWaveOpen] = useState(false);
+  const [countryOpen, setCountryOpen] = useState(false);
+  const [countryQuery, setCountryQuery] = useState("");
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const wavePopover = useRef<HTMLDivElement>(null);
+  const countryPopover = useRef<HTMLDivElement>(null);
 
   // Dim the results while a change is in flight.
   useEffect(() => {
@@ -63,14 +86,18 @@ export default function FilterBar(props: FilterBarProps) {
     return () => root.removeAttribute("data-loading");
   }, [pending]);
 
-  // Close the wave popover on outside click or Escape.
+  // Close the popovers on outside click or Escape.
   useEffect(() => {
-    if (!waveOpen) return;
+    if (!waveOpen && !countryOpen) return;
     function onDown(event: MouseEvent) {
       if (!wavePopover.current?.contains(event.target as Node)) setWaveOpen(false);
+      if (!countryPopover.current?.contains(event.target as Node)) setCountryOpen(false);
     }
     function onKey(event: KeyboardEvent) {
-      if (event.key === "Escape") setWaveOpen(false);
+      if (event.key === "Escape") {
+        setWaveOpen(false);
+        setCountryOpen(false);
+      }
     }
     document.addEventListener("mousedown", onDown);
     document.addEventListener("keydown", onKey);
@@ -78,16 +105,21 @@ export default function FilterBar(props: FilterBarProps) {
       document.removeEventListener("mousedown", onDown);
       document.removeEventListener("keydown", onKey);
     };
-  }, [waveOpen]);
+  }, [waveOpen, countryOpen]);
 
   function navigate(next: {
     selected?: string[];
     classes?: EventClass[];
     windowSeconds?: number;
+    countries?: string[];
+    /** Pass null to clear the time range. */
+    range?: ActiveRange | null;
   }) {
     const selected = next.selected ?? props.selected;
     const classes = next.classes ?? props.classes;
     const windowSeconds = next.windowSeconds ?? props.windowSeconds;
+    const countries = next.countries ?? props.countries;
+    const range = next.range === undefined ? props.range : next.range;
 
     const search = new URLSearchParams();
     if (props.programme && props.programme !== "all") search.set("programme", props.programme);
@@ -95,6 +127,9 @@ export default function FilterBar(props: FilterBarProps) {
     const include = serializeClasses(classes);
     if (include !== null) search.set("include", include);
     if (windowSeconds !== 10) search.set("window", String(windowSeconds));
+    if (countries.length > 0) search.set("country", countries.join(","));
+    if (range?.from) search.set("from", range.from);
+    if (range?.to) search.set("to", range.to);
     if (props.timeline) search.set("timeline", props.timeline);
     if (props.q) search.set("q", props.q);
     if (props.status) search.set("status", props.status);
@@ -112,12 +147,32 @@ export default function FilterBar(props: FilterBarProps) {
     navigate({ classes: EVENT_CLASSES.filter((c) => set.has(c)) });
   }
 
+  // Emails are the anchor: changing them clears the country filter and the
+  // time range, which were chosen against the previous emails.
   function toggleWave(id: string) {
     const set = new Set(props.selected);
     if (set.has(id)) set.delete(id);
     else set.add(id);
-    navigate({ selected: props.waves.filter((w) => set.has(w.id)).map((w) => w.id) });
+    navigate({ selected: props.waves.filter((w) => set.has(w.id)).map((w) => w.id), countries: [], range: null });
   }
+
+  function toggleCountry(code: string) {
+    const set = new Set(props.countries);
+    if (set.has(code)) set.delete(code);
+    else set.add(code);
+    navigate({ countries: props.countryOptions.filter((c) => set.has(c.code)).map((c) => c.code) });
+  }
+
+  const countryFilter = countryQuery.trim().toLowerCase();
+  const visibleCountries = props.countryOptions.filter(
+    (c) => !countryFilter || c.label.toLowerCase().includes(countryFilter) || c.code.toLowerCase().includes(countryFilter)
+  );
+  const countryButtonLabel =
+    props.countries.length === 0
+      ? "Everywhere"
+      : props.countries.length === 1
+        ? props.countryOptions.find((c) => c.code === props.countries[0])?.label ?? props.countries[0]
+        : `${props.countries.length} countries`;
 
   const preset = presetFor(props.classes);
   const selectedWaves = props.waves.filter((w) => props.selected.includes(w.id));
@@ -159,7 +214,7 @@ export default function FilterBar(props: FilterBarProps) {
                 aria-selected={selectedWaves.length === 0}
                 className={`${styles.option} ${selectedWaves.length === 0 ? styles.optionOn : ""}`}
                 onClick={() => {
-                  navigate({ selected: [] });
+                  navigate({ selected: [], countries: [], range: null });
                   setWaveOpen(false);
                 }}
               >
@@ -189,11 +244,102 @@ export default function FilterBar(props: FilterBarProps) {
                 );
               })}
               <div className={styles.popoverHint}>
-                Tick several to compare them together. Click an email&rsquo;s name in the table to focus on it alone.
+                Tick several to compare them together. Click an email&rsquo;s name in the table to focus on it alone. Changing emails
+                clears the country and time filters.
               </div>
             </div>
           )}
         </div>
+
+        <span className={styles.divider} aria-hidden="true" />
+
+        {/* ---- Where ------------------------------------------------------ */}
+        <div className={styles.group} ref={countryPopover}>
+          <span className={styles.groupLabel}>
+            <Icon name="globe" /> Where
+          </span>
+          <button
+            type="button"
+            className={`${styles.picker} ${props.countries.length > 0 ? styles.pickerActive : ""}`}
+            style={{ minWidth: 150 }}
+            onClick={() => setCountryOpen((v) => !v)}
+            aria-haspopup="listbox"
+            aria-expanded={countryOpen}
+            disabled={props.countryOptions.length === 0}
+            title={props.countryOptions.length === 0 ? "No located activity in this selection yet" : undefined}
+          >
+            <span>{countryButtonLabel}</span>
+            <Icon name="chevron" size={12} />
+          </button>
+          <InfoTip topic="countries" />
+
+          {countryOpen && (
+            <div className={`${styles.popover} ${styles.popoverWide}`} role="listbox" aria-multiselectable="true" aria-label="Countries">
+              <input
+                type="search"
+                className={styles.popoverSearch}
+                placeholder="Search countries"
+                value={countryQuery}
+                onChange={(event) => setCountryQuery(event.target.value)}
+                autoFocus
+                aria-label="Search countries"
+              />
+              <div className={styles.popoverActions}>
+                <button type="button" onClick={() => navigate({ countries: [] })} disabled={props.countries.length === 0}>
+                  Everywhere
+                </button>
+                <button
+                  type="button"
+                  onClick={() => navigate({ countries: visibleCountries.map((c) => c.code) })}
+                  disabled={visibleCountries.length === 0}
+                >
+                  Select {countryFilter ? "matches" : "all"}
+                </button>
+              </div>
+              <div className={styles.popoverList}>
+                {visibleCountries.length === 0 && <div className={styles.optionEmpty}>No country matches.</div>}
+                {visibleCountries.map((c) => {
+                  const on = props.countries.includes(c.code);
+                  return (
+                    <button
+                      key={c.code}
+                      type="button"
+                      role="option"
+                      aria-selected={on}
+                      className={`${styles.option} ${on ? styles.optionOn : ""}`}
+                      onClick={() => toggleCountry(c.code)}
+                    >
+                      <span className={styles.optionBox} aria-hidden="true">
+                        {on && <Icon name="check" size={11} />}
+                      </span>
+                      <span className={styles.optionLabel}>{c.label}</span>
+                      <span className={styles.optionCounts}>
+                        <span>
+                          <b>{c.opens.toLocaleString("en-GB")}</b> opens
+                        </span>
+                        <span>
+                          <b>{c.clicks.toLocaleString("en-GB")}</b> clicks
+                        </span>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+              <div className={styles.popoverHint}>
+                Counts reflect the chips and time range. Everything on the page follows this choice; the map keeps every country visible.
+              </div>
+            </div>
+          )}
+        </div>
+
+        {props.range && (
+          <span className={styles.rangeChip} title="Time range — set by dragging on the timeline or with its presets">
+            <Icon name="clock" size={12} /> {props.range.label}
+            <button type="button" className={styles.rangeClear} onClick={() => navigate({ range: null })} aria-label="Clear the time range">
+              <Icon name="close" size={11} />
+            </button>
+          </span>
+        )}
 
         <span className={styles.divider} aria-hidden="true" />
 

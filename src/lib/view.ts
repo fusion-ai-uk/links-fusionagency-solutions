@@ -1,5 +1,6 @@
 import { baseCampaignId, isTestCampaignId } from "@/config/programmes";
 import type { ConfidenceInput, ConfidenceResult, Assessed } from "@/lib/confidence";
+import { countryKey, placeName, UNKNOWN_COUNTRY } from "@/lib/geo-names";
 
 /**
  * The dashboard view model.
@@ -7,11 +8,14 @@ import type { ConfidenceInput, ConfidenceResult, Assessed } from "@/lib/confiden
  * Every event has exactly one CLASS, derived from its confidence assessment:
  *   test · presend · bot · internal · echo · repeat · confirmed
  *
- * The user chooses which classes count. Every figure on the page — totals,
- * approximate uniques, per-email and per-link counts, the recent list — is
- * computed from that choice alone, so the numbers always agree with each other
- * and with the chips that produced them. "Collapse echoes" is simply the
- * choice to leave echo and repeat out.
+ * The user chooses which classes count, optionally narrows to some emails,
+ * some countries and a time range. Every figure on the page — totals,
+ * approximate uniques, per-email and per-link counts, the recent list, the map
+ * — is computed from that one choice, so the numbers always agree with each
+ * other and with the controls that produced them.
+ *
+ * Each control's own counts are computed with every OTHER filter applied, so a
+ * chip or a country shows what switching it on would add to the current view.
  */
 
 export const EVENT_CLASSES = [
@@ -149,9 +153,53 @@ export function presetFor(classes: EventClass[]): keyof typeof PRESETS | null {
   return null;
 }
 
+/** A half-open time window [from, to). Either side may be open. */
+export interface TimeRange {
+  from: Date | null;
+  to: Date | null;
+}
+
+/** Parse `from`/`to` URL parameters (ISO 8601). Invalid or empty means no bound. */
+export function parseRange(params: { from?: string; to?: string }): TimeRange | null {
+  const parse = (v: string | undefined) => {
+    if (!v) return null;
+    const d = new Date(v);
+    return Number.isNaN(d.getTime()) ? null : d;
+  };
+  const from = parse(params.from);
+  const to = parse(params.to);
+  if (!from && !to) return null;
+  if (from && to && to <= from) return null;
+  return { from, to };
+}
+
+export function inRange(range: TimeRange | null, at: Date): boolean {
+  if (!range) return true;
+  if (range.from && at < range.from) return false;
+  if (range.to && at >= range.to) return false;
+  return true;
+}
+
 export interface ClassCount {
   clicks: number;
   opens: number;
+}
+
+export interface CountryCount {
+  /** ISO alpha-2, or "unknown". */
+  code: string;
+  opens: number;
+  clicks: number;
+  /** Distinct hashed IP + user agent. */
+  devices: number;
+}
+
+export interface PlaceCount {
+  country: string;
+  region: string | null;
+  city: string | null;
+  opens: number;
+  clicks: number;
 }
 
 export interface CampaignView {
@@ -174,6 +222,9 @@ export interface DashboardView {
   classes: Set<EventClass>;
   /** Selected email IDs (base IDs); empty means every email in scope. */
   selected: string[];
+  /** Selected countries (codes or "unknown"); empty means everywhere. */
+  countries: string[];
+  range: TimeRange | null;
   totalOpens: number;
   totalClicks: number;
   approxUniqueOpens: number;
@@ -186,8 +237,16 @@ export interface DashboardView {
   campaigns: CampaignView[];
   /** Latest events among those counted, newest first. */
   recent: ViewEvent[];
-  /** Counts per class across the selection, regardless of which are counted. */
+  /** Counts per class across the selection, with country and time applied. */
   classCounts: Record<EventClass, ClassCount>;
+  /**
+   * Counts per country across the selection, with classes and time applied
+   * but NOT the country filter — this feeds the country picker and the map,
+   * both of which need to show what is not selected too. Busiest first.
+   */
+  countryCounts: CountryCount[];
+  /** Places within the selected countries (or everywhere), busiest first. */
+  places: PlaceCount[];
   /** Events counted vs recorded, for the "showing X of Y" line. */
   counted: number;
   recorded: number;
@@ -208,15 +267,22 @@ export function buildView(options: {
   scopeCampaignIds: string[];
   selectedCampaignIds: string[];
   classes: EventClass[];
+  countries?: string[];
+  range?: TimeRange | null;
   recentLimit?: number;
+  placeLimit?: number;
 }): DashboardView {
   const { events, confidence, scopeCampaignIds, selectedCampaignIds } = options;
   const classes = new Set(options.classes);
   const selected = new Set(selectedCampaignIds);
+  const countries = new Set(options.countries ?? []);
+  const range = options.range ?? null;
   const recentLimit = options.recentLimit ?? 50;
+  const placeLimit = options.placeLimit ?? 40;
 
   const inSelection = (campaignId: string | null) =>
     selected.size === 0 || selected.has(baseCampaignId(campaignId ?? "unknown"));
+  const inCountries = (code: string) => countries.size === 0 || countries.has(code);
 
   const classified: ViewEvent[] = events.map((e) => {
     const assessed = confidence.byId.get(e.id);
@@ -238,6 +304,8 @@ export function buildView(options: {
   const campaignDevices = new Map<string, { opens: Set<string>; clicks: Set<string> }>();
 
   const classCounts = emptyClassCounts();
+  const countryTallies = new Map<string, { opens: number; clicks: number; devices: Set<string> }>();
+  const placeTallies = new Map<string, PlaceCount>();
   const clickDevices = new Set<string>();
   const openDevices = new Set<string>();
   const perLink = new Map<string, number>();
@@ -253,15 +321,21 @@ export function buildView(options: {
     const base = baseCampaignId(e.campaignId ?? "unknown");
     const isClick = e.eventType === "click";
     const cv = perCampaign.get(base);
+    const code = countryKey(e.ipCountry);
+    const classOk = classes.has(e.class);
+    const rangeOk = inRange(range, e.createdAt);
+    const countryOk = inCountries(code);
 
-    // Per-email rows follow the chips but not the selection: the table is the
-    // stable reference, while the headline figures narrow to what is selected.
+    // Per-email rows follow the chips, countries and time but not the
+    // selection: the table is the stable reference, while the headline
+    // figures narrow to what is selected.
     if (cv) {
       const bucket = cv.byClass[e.class];
-      if (isClick) bucket.clicks++;
-      else bucket.opens++;
-
-      if (classes.has(e.class)) {
+      if (rangeOk && countryOk) {
+        if (isClick) bucket.clicks++;
+        else bucket.opens++;
+      }
+      if (classOk && rangeOk && countryOk) {
         if (isClick) cv.clicks++;
         else cv.opens++;
         const devices =
@@ -274,16 +348,25 @@ export function buildView(options: {
     if (!inSelection(e.campaignId)) continue;
     recorded++;
 
-    // Class counts across the selection, so chips can show what each would add.
-    if (isClick) classCounts[e.class].clicks++;
-    else classCounts[e.class].opens++;
+    // Each control shows what it would add given the others.
+    if (rangeOk && countryOk) {
+      if (isClick) classCounts[e.class].clicks++;
+      else classCounts[e.class].opens++;
+    }
+    if (classOk && rangeOk) {
+      const tally = countryTallies.get(code) ?? { opens: 0, clicks: 0, devices: new Set<string>() };
+      if (isClick) tally.clicks++;
+      else tally.opens++;
+      tally.devices.add(deviceKey(e));
+      countryTallies.set(code, tally);
+    }
 
-    if (e.class === "confirmed") {
+    if (e.class === "confirmed" && rangeOk && countryOk) {
       if (isClick) confirmedClicks++;
       else confirmedOpens++;
     }
 
-    if (!classes.has(e.class)) continue;
+    if (!classOk || !rangeOk || !countryOk) continue;
     counted++;
 
     if (isClick) {
@@ -294,6 +377,14 @@ export function buildView(options: {
       totalOpens++;
       openDevices.add(deviceKey(e));
     }
+
+    const placeKey = `${code}|${e.ipRegion ?? ""}|${e.ipCity ?? ""}`;
+    const place =
+      placeTallies.get(placeKey) ??
+      { country: code, region: placeName(e.ipRegion), city: placeName(e.ipCity), opens: 0, clicks: 0 };
+    if (isClick) place.clicks++;
+    else place.opens++;
+    placeTallies.set(placeKey, place);
 
     recent.push(e);
   }
@@ -306,9 +397,18 @@ export function buildView(options: {
 
   recent.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
 
+  const byVolume = <T extends { opens: number; clicks: number }>(a: T, b: T) =>
+    b.opens + b.clicks - (a.opens + a.clicks) || b.clicks - a.clicks;
+
+  const countryCounts: CountryCount[] = [...countryTallies.entries()]
+    .map(([code, t]) => ({ code, opens: t.opens, clicks: t.clicks, devices: t.devices.size }))
+    .sort((a, b) => byVolume(a, b) || (a.code === UNKNOWN_COUNTRY ? 1 : b.code === UNKNOWN_COUNTRY ? -1 : a.code.localeCompare(b.code)));
+
   return {
     classes,
     selected: selectedCampaignIds,
+    countries: [...countries],
+    range,
     totalOpens,
     totalClicks,
     approxUniqueOpens: openDevices.size,
@@ -321,6 +421,8 @@ export function buildView(options: {
     campaigns: [...perCampaign.values()],
     recent: recent.slice(0, recentLimit),
     classCounts,
+    countryCounts,
+    places: [...placeTallies.values()].sort(byVolume).slice(0, placeLimit),
     counted,
     recorded,
   };

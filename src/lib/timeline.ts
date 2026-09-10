@@ -13,6 +13,7 @@ import {
   nextUkDay,
   ukDayAnchor,
   ukDayKey,
+  ukDayStart,
   ukHourKey,
 } from "@/lib/time";
 
@@ -39,14 +40,24 @@ export interface TimelineBucket {
   label: string;
   /** Tooltip heading — "Thu 10 Sep" or "Thu 10 Sep · 11:00–12:00". */
   title: string;
-  /** ISO start of the bucket. */
+  /** ISO start of the bucket (day buckets: noon UTC anchor). */
   start: string;
+  /** The instants this bucket spans, for the time-range brush. ISO, half-open. */
+  rangeFrom: string;
+  rangeTo: string;
   opens: number;
   clicks: number;
   /** This bucket contains the send moment. */
   isSend: boolean;
   /** Non-bot opens that day when the day is a later burst; null otherwise (day grain only). */
   burst: number | null;
+}
+
+/** A one-click time range, anchored on the send. ISO instants, half-open [from, to). */
+export interface RangePreset {
+  label: string;
+  from: string;
+  to: string;
 }
 
 export interface TimelineSeries {
@@ -76,6 +87,7 @@ export interface TimelineData {
   campaignId: string;
   label: string;
   send: TimelineSend | null;
+  presets: RangePreset[];
   bursts: (OpenBurst & { label: string })[];
   threshold: number;
   totals: { opens: number; clicks: number };
@@ -151,6 +163,8 @@ function buildDaySeries(
       label: formatUkDayShort(key),
       title: formatUkDayWithWeekday(key),
       start: ukDayAnchor(key).toISOString(),
+      rangeFrom: ukDayStart(key).toISOString(),
+      rangeTo: ukDayStart(nextUkDay(key)).toISOString(),
       opens: 0,
       clicks: 0,
       isSend: key === sendDay,
@@ -205,6 +219,8 @@ function buildHourSeries(events: TimelineEvent[], send: SendInfo | null): Timeli
       label: formatUkClock(start),
       title: `${formatUkDayWithWeekday(ukDayKey(start))} · ${formatUkClock(start)}–${endClock}`,
       start: start.toISOString(),
+      rangeFrom: start.toISOString(),
+      rangeTo: new Date(start.getTime() + HOUR_MS).toISOString(),
       opens: 0,
       clicks: 0,
       isSend: key === sendHour,
@@ -271,10 +287,23 @@ export function buildTimeline(options: {
     else opens++;
   }
 
+  const presets: RangePreset[] = options.send
+    ? [
+        {
+          label: "Send day",
+          from: ukDayStart(sendDay!).toISOString(),
+          to: ukDayStart(nextUkDay(sendDay!)).toISOString(),
+        },
+        { label: "First 72 h", from: options.send.at.toISOString(), to: new Date(options.send.at.getTime() + 72 * HOUR_MS).toISOString() },
+        { label: "First 7 days", from: options.send.at.toISOString(), to: new Date(options.send.at.getTime() + 7 * 86_400_000).toISOString() },
+      ]
+    : [];
+
   return {
     campaignId: options.campaignId,
     label: options.label,
     send,
+    presets,
     bursts,
     threshold,
     totals: { opens, clicks },

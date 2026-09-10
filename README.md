@@ -58,7 +58,8 @@ Approximate unique metrics in the dashboard use distinct combinations of `campai
 | `GET /admin/setup/[campaignId]` | Per-email tracking setup + handover pack |
 | `GET /admin/guide` | How to read the figures — caveats and definitions |
 | `GET /admin/duplication` | Duplication analysis — scanner echoes, repeat clicks, evidence |
-| `GET /admin/export.csv` | CSV export (scoped to the current dashboard view) |
+| `GET /admin/export.csv` | CSV export (scoped to the current dashboard view: campaigns, country, time range) |
+| `GET /admin/map-paths` | Projected map geometry as SVG paths (cached for a day) |
 | `GET /examples` | Generic email HTML snippet reference (public) |
 
 ---
@@ -559,8 +560,27 @@ view can be bookmarked or sent to a colleague.
   bursts. It follows the chips, so it shows exactly what the figures count.
   URL parameter `timeline=<cid>`.
 
+- **Where** — a searchable multi-select of countries with activity in the
+  selected emails (counts per country, plus *Unknown location* for rows
+  recorded without a country). Applies to every figure, table and chart;
+  the map keeps every country visible with the selection outlined. Changing
+  the selected emails clears it. URL parameter `country=GB,IE,unknown`.
+- **Time range** — drag across the timeline, or use *Send day* / *First 72 h*
+  / *First 7 days* (shown once a send moment is known). Applies everywhere,
+  shows as a removable chip in the bar, and clears when the emails change.
+  URL parameters `from`/`to` (ISO 8601, half-open).
+- **Map and country tables** — the *Where* section shows an Equal Earth map
+  (World, Europe and UK & Ireland views, each projected and clipped separately
+  on the server; colour by opens or clicks; hover for figures; click a country
+  to filter), a country table (opens, clicks, approximate devices, share) and a
+  place table (city/region) for the selected countries. Geometry is Natural
+  Earth via world-atlas (110m for the world, 50m for the close-ups), vendored
+  in `src/data`, and served once from `/admin/map-paths` with a one-day
+  private cache.
+
 URL parameters: `programme`, `campaign` (repeatable), `include` (comma list
-of classes; absent means all live), `window`, `timeline`, `q`, `status`. The older
+of classes; absent means all live), `window`, `timeline`, `country`, `from`,
+`to`, `q`, `status`. The older
 `bots=exclude`, `tests=include` and `collapse=1` still work and convert to
 `include` on the next navigation.
 
@@ -733,6 +753,8 @@ src/
     confidence.ts           # Phase (test/pre-send/live) and confidence label per event
     send-detection.ts       # Finds the send moment from the first burst of opens
     timeline.ts             # Per-email opens/clicks series by UK day and hour
+    map.ts                  # World/Europe/UK map paths, projected server-side
+    geo-names.ts            # Country names, unknown-location token, place decoding
     view.ts                 # Dashboard view model: signal classes and figures
     time.ts                 # UK-time formatting
     rate-limit.ts           # Sign-in throttling

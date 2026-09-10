@@ -8,10 +8,20 @@ export interface GeoLocation {
   city: string | null;
 }
 
+/** Vercel percent-encodes these values ("Milton%20Keynes"); store them readable. */
+function decode(value: string | null): string | null {
+  if (!value) return null;
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
 export function getGeoFromHeaders(request: Request): GeoLocation {
   return {
     country: request.headers.get("x-vercel-ip-country") ?? null,
-    region: request.headers.get("x-vercel-ip-country-region") ?? null,
-    city: request.headers.get("x-vercel-ip-city") ?? null,
+    region: decode(request.headers.get("x-vercel-ip-country-region")),
+    city: decode(request.headers.get("x-vercel-ip-city")),
   };
 }

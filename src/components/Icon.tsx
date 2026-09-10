@@ -37,6 +37,8 @@ const PATHS: Record<string, string> = {
   send: "M22 2L11 13M22 2l-7 20-4-9-9-4 20-7",
   flag: "M5 21V4M5 4h13l-2 4 2 4H5",
   table: "M3 5h18v14H3V5M3 10h18M3 15h18M9 5v14M15 5v14",
+  globe: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18",
+  pin: "M12 21s-6-5.3-6-11a6 6 0 0 1 12 0c0 5.7-6 11-6 11M12 12.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5",
 };
 
 export type IconName = keyof typeof PATHS;

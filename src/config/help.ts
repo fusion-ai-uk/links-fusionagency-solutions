@@ -150,8 +150,45 @@ export const HELP = {
       "A coarse country, region or city guess from the network the request came from. Often the location of a mail provider's server rather than a person.",
     detail: [
       "Location comes from the edge network handling the request. It is approximate by design.",
-      "Where a mail client proxies images, the location reflects that proxy — commonly a data centre in another country entirely.",
+      "Where a mail client proxies images, the location reflects that proxy — commonly a data centre in another country entirely. Apple Mail Privacy Protection and Gmail image caching are the usual sources of opens that appear to come from the United States or Ireland.",
+      "Clicks are more trustworthy than opens here: a click comes from the reader's own browser, so its location is usually the reader's. Scanner echoes are the exception, and they are labelled.",
       "No exact IP address is ever stored. Addresses are one-way hashed before they reach the database.",
+    ],
+  },
+
+  countries: {
+    label: "Country filter",
+    short:
+      "Narrows every figure, table and chart to the chosen countries. The list shows only countries with activity in the selected emails, with a count each. Choosing different emails clears it.",
+    detail: [
+      "Countries are listed busiest first, with the number of counted clicks and opens next to each. Type to search. Unknown location groups the rows recorded without a country — older data, or requests that carried no location.",
+      "The filter applies everywhere: the headline cards, the per-email table, clicks by link, recent events, the timeline and the country and place tables. The map keeps showing every country so you can see the selection in context; selected countries are outlined.",
+      "Emails come first. Changing which emails are selected clears the country filter and the time range, so a country chosen for one wave is never silently applied to another. The list of emails is never narrowed by country.",
+      "Because the filter is in the address bar, a view such as one email, Ireland only, confirmed only can be bookmarked or sent to a colleague.",
+    ],
+  },
+
+  map: {
+    label: "Map",
+    short:
+      "Where the counted activity came from, by country, coloured by opens or clicks. Click a country to filter to it; click again to remove it. Follows the chips and the time range.",
+    detail: [
+      "Colour intensity follows the chosen metric on a square-root scale, so the many small countries stay visible next to the one large one. Hover for opens, clicks, approximate devices and share.",
+      "Three views: UK & Ireland, Europe and World. For a UK audience the interesting detail is within the UK, so the place table under the map lists cities and regions for the selected countries (or everywhere, when none is selected).",
+      "The map is equal-area (Equal Earth), so a country's size on screen is honest. Territories without an ISO country code are drawn but carry no data.",
+      "Read opens with care: mail providers pre-load images from their own servers, so opens in the United States or Ireland are often readers elsewhere. Switch the colour to Clicks for a truer picture of where people are.",
+    ],
+  },
+
+  timeRange: {
+    label: "Time range",
+    short:
+      "Drag across the timeline, or use Send day / First 72 h / First 7 days, to count only what happened in that window. Applies to every figure on the page and shows as a chip in the bar.",
+    detail: [
+      "Drag from one bar to another on the timeline to select that span. The chart keeps showing the whole period, with the bars outside the range dimmed, so the selection stays in context.",
+      "The presets appear once an email's send moment is known (recorded or detected) and are anchored on it: the send's UK calendar day, the 72 hours from the send moment, or the first week.",
+      "The range travels in the address bar as two UTC instants (from, to), half-open — an event exactly at the end is not included. Every figure, table and the map respect it; the CSV export accepts the same parameters.",
+      "Changing which emails are selected clears the range, because a window anchored on one email's send means little for another.",
     ],
   },
 
@@ -345,7 +382,11 @@ export const GUIDE_ORDER: HelpId[] = [
   "approxUnique",
   "clicksPerOpen",
   "timeline",
+  "timeRange",
   "sendDetection",
+  "countries",
+  "map",
+  "location",
   "preSend",
   "confidence",
   "internal",
@@ -359,7 +400,6 @@ export const GUIDE_ORDER: HelpId[] = [
   "testSends",
   "linkId",
   "unassigned",
-  "location",
   "recentEvents",
   "csvExport",
 ];

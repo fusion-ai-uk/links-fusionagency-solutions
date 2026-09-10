@@ -122,3 +122,12 @@ export function formatUkDayWithWeekday(dayKey: string): string {
 export function formatUkClock(date: Date): string {
   return shortHour.format(date).replace(/^24/, "00");
 }
+
+/** The instant a UK calendar day begins (00:00 local, GMT or BST). */
+export function ukDayStart(dayKey: string): Date {
+  const [y, m, d] = dayKey.split("-").map(Number);
+  let t = Date.UTC(y, m - 1, d);
+  // In summer 00:00Z is 01:00 BST, so the day began an hour earlier.
+  if (ukParts(new Date(t)).hour === 1) t -= 3_600_000;
+  return new Date(t);
+}

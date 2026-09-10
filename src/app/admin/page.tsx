@@ -9,6 +9,7 @@ import { BOT_REASON_LABELS } from "@/lib/bot-detect";
 import { formatUkDate, formatUkTime, UK_TIME_LABEL } from "@/lib/time";
 import { loadConfidence, type ConfidenceInput, type ConfidenceResult, type SendInfo } from "@/lib/confidence";
 import { buildTimeline, type TimelineData } from "@/lib/timeline";
+import { countryName, parseCountries, placeName, UNKNOWN_COUNTRY } from "@/lib/geo-names";
 import {
   buildView,
   classOf,
@@ -16,6 +17,7 @@ import {
   describeClasses,
   EVENT_CLASSES,
   parseClasses,
+  parseRange,
   serializeClasses,
   type DashboardView,
   type EventClass,
@@ -39,8 +41,9 @@ import { SOURCE_LINE } from "@/config/help";
 import InfoTip from "@/components/InfoTip";
 import Icon from "@/components/Icon";
 import Collapsible from "@/components/Collapsible";
-import FilterBar, { type WaveOption } from "@/components/FilterBar";
+import FilterBar, { type ActiveRange, type CountryOption, type WaveOption } from "@/components/FilterBar";
 import Timeline, { type TimelineOption } from "@/components/Timeline";
+import WorldMap from "@/components/WorldMap";
 import { logoutAction } from "./actions";
 import styles from "./admin.module.css";
 
@@ -54,6 +57,11 @@ type SearchParams = {
   window?: string;
   /** The email shown on the timeline. */
   timeline?: string;
+  /** Country filter: comma list of ISO alpha-2 codes and/or "unknown". */
+  country?: string | string[];
+  /** Time range, ISO instants, half-open. */
+  from?: string;
+  to?: string;
   q?: string;
   status?: string;
   // Older links
@@ -109,6 +117,9 @@ function buildHref(
     include?: string | null;
     window?: string;
     timeline?: string;
+    country?: string[];
+    from?: string;
+    to?: string;
     q?: string;
     status?: string;
   }
@@ -119,6 +130,9 @@ function buildHref(
   if (parts.include) search.set("include", parts.include);
   if (parts.window) search.set("window", parts.window);
   if (parts.timeline) search.set("timeline", parts.timeline);
+  if (parts.country && parts.country.length > 0) search.set("country", parts.country.join(","));
+  if (parts.from) search.set("from", parts.from);
+  if (parts.to) search.set("to", parts.to);
   if (parts.q) search.set("q", parts.q);
   if (parts.status) search.set("status", parts.status);
   const query = search.toString();
@@ -142,6 +156,22 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
     ? (params.status as CampaignStatus)
     : null;
   const requestedCampaigns = asList(params.campaign);
+  const countries = parseCountries(params.country);
+  const range = parseRange(params);
+  const rangeIso = { from: range?.from?.toISOString(), to: range?.to?.toISOString() };
+  const shortUk = (d: Date) => formatUkTime(d).slice(0, 17);
+  const activeRange: ActiveRange | null = range
+    ? {
+        from: rangeIso.from ?? null,
+        to: rangeIso.to ?? null,
+        label:
+          range.from && range.to
+            ? `${shortUk(range.from)} → ${shortUk(range.to)}`
+            : range.from
+              ? `from ${shortUk(range.from)}`
+              : `until ${shortUk(range.to!)}`,
+      }
+    : null;
 
   let dbCampaignIds: string[] = [];
   let scope: ReturnType<typeof resolveScope> | null = null;
@@ -211,6 +241,8 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
     scopeCampaignIds: scope.programmeCampaignIds,
     selectedCampaignIds: scope.selectedCampaignIds,
     classes,
+    countries,
+    range,
   });
 
   const nav = buildProgrammeNav(dbCampaignIds);
@@ -251,7 +283,7 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
   const mayExport = can(user.role, "exportCsv");
   const exportIds = scope.selectedCampaignIds.length > 0 ? scope.selectedCampaignIds : scope.programmeCampaignIds;
   const exportHref = mayExport
-    ? buildHref("/admin/export.csv", { campaign: exportIds, window: params.window })
+    ? buildHref("/admin/export.csv", { campaign: exportIds, window: params.window, country: countries, from: rangeIso.from, to: rangeIso.to })
     : null;
   const duplicationHref = buildHref("/admin/duplication", {
     programme: scope.programmeId,
@@ -268,8 +300,16 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
         ? selectedLabels.join(" + ")
         : `${selectedLabels.length} emails`,
     `counting ${describeClasses(classes)}`,
+    countries.length === 0
+      ? null
+      : countries.length <= 2
+        ? countries.map((c) => countryName(c)).join(" + ")
+        : `${countries.length} countries`,
+    activeRange ? activeRange.label : null,
     `${n(view.counted)} of ${n(view.recorded)} events`,
-  ].join(" · ");
+  ]
+    .filter((part): part is string => part !== null)
+    .join(" · ");
 
   const notCounted = view.recorded - view.counted;
   const hiddenClasses = EVENT_CLASSES.filter(
@@ -309,9 +349,13 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
   let timelineData: TimelineData | null = null;
   if (timelineId) {
     const row = staticRows.find((r) => r.id === timelineId);
+    // The chart follows the chips and the country filter; the time range is
+    // shown on it (dimmed outside) rather than applied, so the range stays in context.
+    const countrySet = new Set(countries);
     const timelineEvents = confidence.events
       .filter((e) => (e.campaignId ? e.campaignId.replace(/-test$/, "") : "unknown") === timelineId)
       .filter((e) => view.classes.has(classOf(confidence!.byId.get(e.id))))
+      .filter((e) => countrySet.size === 0 || countrySet.has((e.ipCountry?.trim().toUpperCase() || UNKNOWN_COUNTRY)))
       .map((e) => ({ eventType: e.eventType, createdAt: e.createdAt }));
     timelineData = buildTimeline({
       campaignId: timelineId,
@@ -330,10 +374,34 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
       include: includeParam,
       window: params.window,
       timeline: row.id,
+      country: countries,
+      from: rangeIso.from,
+      to: rangeIso.to,
       q: query || undefined,
       status: statusFilter ?? undefined,
     }),
   }));
+  // Search strings the client components build on when they change one filter.
+  const stripPath = (href: string) => href.replace(/^\/admin\??/, "");
+  const commonParts = {
+    programme: scope.programmeId,
+    campaign: scope.selectedCampaignIds,
+    include: includeParam,
+    window: params.window,
+    timeline: timelineParam,
+    q: query || undefined,
+    status: statusFilter ?? undefined,
+  };
+  const rangeHrefBase = stripPath(buildHref("/admin", { ...commonParts, country: countries }));
+  const countryHrefBase = stripPath(buildHref("/admin", { ...commonParts, from: rangeIso.from, to: rangeIso.to }));
+  const countryOptions: CountryOption[] = view.countryCounts.map((c) => ({
+    code: c.code,
+    label: countryName(c.code),
+    opens: c.opens,
+    clicks: c.clicks,
+  }));
+  const locatedCountries = view.countryCounts.filter((c) => c.code !== UNKNOWN_COUNTRY);
+  const totalLocated = locatedCountries.reduce((s, c) => s + c.opens + c.clicks, 0);
   const detectedSends = staticRows
     .map((row) => confidence!.sends.get(row.id))
     .filter((s): s is SendInfo => s !== undefined && s.source === "detected");
@@ -395,6 +463,9 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
           selected={scope.selectedCampaignIds}
           classes={classes}
           classCounts={view.classCounts}
+          countryOptions={countryOptions}
+          countries={countries}
+          range={activeRange}
           windowSeconds={echoWindowSeconds}
           windowOptions={ECHO_WINDOW_OPTIONS}
           timeline={timelineParam}
@@ -505,7 +576,132 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
               )}
             </p>
           </div>
-          <Timeline data={timelineData} options={timelineOptions} selectedId={timelineId} />
+          <Timeline
+            data={timelineData}
+            options={timelineOptions}
+            selectedId={timelineId}
+            range={activeRange ? { from: activeRange.from, to: activeRange.to } : null}
+            hrefBase={rangeHrefBase}
+          />
+        </section>
+
+        {/* ---- Where ---------------------------------------------------------- */}
+        <section className={`${styles.panel} ${styles.panelSpaced}`} style={{ borderLeft: "var(--accent-bar) solid var(--accent-teal)" }}>
+          <div className={styles.sectionTitleRow}>
+            <div className={styles.sectionTitleGroup}>
+              <h2>
+                <Icon name="globe" size={16} /> Where
+              </h2>
+              <InfoTip topic="map" />
+            </div>
+            <p className={styles.sectionHint}>
+              {locatedCountries.length === 0
+                ? "No located activity in this view"
+                : `${locatedCountries.length} countr${locatedCountries.length === 1 ? "y" : "ies"} · click a country to filter`}
+              {countries.length > 0 && (
+                <>
+                  {" · "}
+                  <Link href={buildHref("/admin", { ...commonParts, from: rangeIso.from, to: rangeIso.to })}>everywhere</Link>
+                </>
+              )}
+            </p>
+          </div>
+          <div className={styles.whereGrid}>
+            <WorldMap counts={view.countryCounts} selected={countries} hrefBase={countryHrefBase} pathname="/admin" />
+            <div className={styles.whereTables}>
+              <div className={styles.tableScroll} style={{ maxHeight: 340 }}>
+                <table className={styles.table}>
+                  <thead>
+                    <tr>
+                      <th>Country</th>
+                      <th className={styles.numeric}>Opens</th>
+                      <th className={styles.numeric}>Clicks</th>
+                      <th className={styles.numeric}>
+                        Devices
+                        <InfoTip topic="approxUnique" />
+                      </th>
+                      <th className={styles.numeric}>Share</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {view.countryCounts.length === 0 && (
+                      <tr>
+                        <td colSpan={5} className={styles.empty}>
+                          Nothing counted in this view.
+                        </td>
+                      </tr>
+                    )}
+                    {view.countryCounts.map((c) => {
+                      const on = countries.includes(c.code);
+                      const next = on ? countries.filter((x) => x !== c.code) : [...countries, c.code];
+                      return (
+                        <tr key={c.code} className={on ? styles.rowSelected : undefined}>
+                          <td>
+                            <Link
+                              href={buildHref("/admin", { ...commonParts, country: next, from: rangeIso.from, to: rangeIso.to })}
+                              className={styles.rowHead}
+                              style={{ textDecoration: "none" }}
+                              title={on ? "Remove from the country filter" : "Filter to this country"}
+                            >
+                              {on && <Icon name="check" size={12} style={{ color: "var(--accent-cyan)", marginRight: "0.35rem" }} />}
+                              {countryName(c.code)}
+                            </Link>
+                            {c.code !== UNKNOWN_COUNTRY && <span className={styles.rowNote}>{c.code}</span>}
+                          </td>
+                          <td className={styles.numeric}>{n(c.opens)}</td>
+                          <td className={styles.numeric}>{n(c.clicks)}</td>
+                          <td className={styles.numeric}>{n(c.devices)}</td>
+                          <td className={styles.numeric}>
+                            {c.code === UNKNOWN_COUNTRY || totalLocated === 0 ? "—" : `${(((c.opens + c.clicks) / totalLocated) * 100).toFixed(1)}%`}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <div className={styles.tableScroll} style={{ maxHeight: 300 }}>
+                <table className={styles.table}>
+                  <thead>
+                    <tr>
+                      <th>
+                        Place
+                        <InfoTip topic="location" />
+                      </th>
+                      <th>Country</th>
+                      <th className={styles.numeric}>Opens</th>
+                      <th className={styles.numeric}>Clicks</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {view.places.length === 0 && (
+                      <tr>
+                        <td colSpan={4} className={styles.empty}>
+                          No places to show.
+                        </td>
+                      </tr>
+                    )}
+                    {view.places.map((p) => (
+                      <tr key={`${p.country}|${p.region ?? ""}|${p.city ?? ""}`}>
+                        <td>
+                          <span className={styles.rowHead}>{p.city ?? (p.region ? p.region : "Unknown place")}</span>
+                          {p.city && p.region && <span className={styles.rowNote}>{p.region}</span>}
+                        </td>
+                        <td>{p.country === UNKNOWN_COUNTRY ? "—" : p.country}</td>
+                        <td className={styles.numeric}>{n(p.opens)}</td>
+                        <td className={styles.numeric}>{n(p.clicks)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+          <p className={styles.sourceLine}>
+            Location is the network each request came from, so opens routed through a mail provider (Apple, Gmail) show as that provider&rsquo;s
+            country. Clicks are the better guide to where readers are. Share is of located opens + clicks. Places are the busiest {view.places.length}{" "}
+            {countries.length > 0 ? "within the selected countries" : "everywhere"}.
+          </p>
         </section>
 
         {/* ---- The emails ----------------------------------------------------- */}
@@ -853,9 +1049,9 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
                       </td>
                       <td className={styles.mono}>{event.campaignId ?? "—"}</td>
                       <td className={styles.mono}>{event.linkId ?? "—"}</td>
-                      <td>
+                      <td title={event.ipCountry ? countryName(event.ipCountry) : undefined}>
                         {event.ipCountry ?? "—"}
-                        {event.ipCity ? ` · ${event.ipCity}` : ""}
+                        {event.ipCity ? ` · ${placeName(event.ipCity)}` : ""}
                       </td>
                       <td>{CLIENT_KIND_LABELS[(event.clientKind as keyof typeof CLIENT_KIND_LABELS) ?? "unknown"] ?? CLIENT_KIND_LABELS.unknown}</td>
                     </tr>
