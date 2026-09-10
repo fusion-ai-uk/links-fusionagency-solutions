@@ -254,13 +254,16 @@ export const HELP = {
   sendDetection: {
     label: "Send detection",
     short:
-      "Nobody tells the system when an email goes out, so it watches for the moment itself: the first UK day with 50 or more opens is the send day, and the start of that burst is the live-from moment. Recording the send in config confirms it.",
+      "Nobody tells the system when an email goes out, so it works it out: a day needs at least 50 opens to count as a send at all, and where a modest day is dwarfed by the days that follow, the send moves to the first genuinely big one. Recording the send in config confirms it.",
     detail: [
-      "Before a send, the live campaign ID sees a trickle of opens from the build team. A send is unmistakable: dozens or hundreds of opens within an hour. The first UK calendar day with at least 50 non-bot opens is taken as the send day.",
-      "Within that day, the send moment is the earliest open followed by a burst — at least five more opens within half an hour. Anything on the live ID before that moment is pre-send; everything from it is live. This is what stops the build team's checks on the morning of the send being counted as recipients.",
-      "A detected send is used only while the email's status has not yet been moved to Sent. Once the send is recorded in config with its live-from moment, config takes over. Where the two differ, config wins.",
-      "Later days that clear the threshold again are marked on the timeline as bursts: a resend, a reminder, or a mail provider pre-fetching images for many inboxes at once. They are shown for interpretation, never acted on.",
-      "The threshold is 50 opens by default and can be lowered per email for a small audience.",
+      "Two rules, in order. First a volume floor: only a UK calendar day with at least 50 non-bot opens can be the send day, so the pre-send trickle from the build team never qualifies however long it goes on.",
+      "Then recalibration. A day that scrapes past 50 and is then dwarfed by the next day was probably not the send — a seed list, a test to a small group, or a false start. Among the qualifying days in the first week, each day's opens in the 24 hours from its own burst start are compared, and the send is the earliest day that reaches at least a fifth of the largest.",
+      "So 60 opens, then 800, then 1,200, then 400 makes the 800 day the send: the 60 is too small to be the real thing, and the 1,200 is the day after a send, which is normal. Whereas 300, then 350, then 100 keeps the 300 day, because nothing later dwarfs it.",
+      "The comparison uses a rolling 24 hours rather than the calendar day, so a late-afternoon send whose opens mostly land the next morning is not passed over for the wrong reason. The window is one week, so a resend a month later cannot drag the send date earlier.",
+      "Within the chosen day, the send moment is the earliest open followed by a burst — at least five more opens within half an hour. Anything on the live ID before that moment is pre-send; everything from it is live. This is what stops the build team's checks on the morning of the send being counted as recipients.",
+      "Days that were passed over are still shown on the timeline, flagged in violet and labelled as a likely seed or test send. Days after the send that clear the threshold again are flagged in orange as bursts: a resend, a reminder, or a mail provider pre-fetching images for many inboxes at once. Neither is ever hidden, and neither changes a figure.",
+      "Everything is recalculated on every page load, so the answer recalibrates as more data arrives. A detected send is used only while the email's status has not yet been moved to Sent; once the send is recorded in config with its live-from moment, config takes over. Where the two differ, config wins.",
+      "The 50-open floor can be lowered per email for a small audience.",
     ],
   },
 

@@ -438,3 +438,13 @@
   z-index: 3;
   white-space: nowrap;
 }
+
+/* A qualifying day the detector passed over: before the send, likely a seed. */
+.flagPreSend {
+  fill: var(--accent-violet);
+}
+
+.flagPreSendText {
+  fill: var(--accent-violet);
+  font-size: 10px;
+}

@@ -1138,7 +1138,18 @@ function WaveRow({
         {sendDetected && send && (
           <span
             className={styles.rowNoteAccent}
-            title={`${send.detected?.opensThatDay ?? "50+"} opens on the send day. Counting live from this moment until the send is recorded in config (status sent + liveFrom).`}
+            title={[
+              `${send.detected?.opensThatDay ?? "50+"} opens on the send day`,
+              send.detected ? `${send.detected.opensFirst24h} in the first 24 hours` : null,
+              send.detected && send.detected.passedOver.length > 0
+                ? `${send.detected.passedOver.length} earlier day(s) over the threshold were passed over as too small to be the send (${send.detected.passedOver
+                    .map((b) => `${b.day}: ${b.opens}`)
+                    .join(", ")})`
+                : null,
+              "Counting live from this moment until the send is recorded in config (status sent + liveFrom).",
+            ]
+              .filter(Boolean)
+              .join(". ")}
           >
             {`// send detected ${formatUkTime(send.at)} ${UK_TIME_LABEL} — live from then; confirm in config`}
           </span>

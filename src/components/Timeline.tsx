@@ -303,8 +303,18 @@ export default function Timeline({ data, options, selectedId, range, hrefBase }:
             )}
             {hovered.burst !== null && (
               <span className={styles.tooltipNote}>
-                <Icon name="flag" size={11} /> Burst: {n(hovered.burst)} opens this day (threshold {data?.threshold}). A resend, a reminder, or
-                a mail provider pre-fetching images.
+                <Icon name="flag" size={11} />{" "}
+                {hovered.burstBeforeSend ? (
+                  <>
+                    {n(hovered.burst)} opens this day, but far fewer than the send that followed — most likely a seed list or a test to a small
+                    group, so it is not treated as the send.
+                  </>
+                ) : (
+                  <>
+                    Burst: {n(hovered.burst)} opens this day (threshold {data?.threshold}). A resend, a reminder, or a mail provider pre-fetching
+                    images.
+                  </>
+                )}
               </span>
             )}
             {range && !inRange(hovered, range) && <span className={styles.tooltipNote}>Outside the time range — not counted.</span>}
@@ -330,6 +340,12 @@ export default function Timeline({ data, options, selectedId, range, hrefBase }:
               <Icon name="clock" size={11} /> No send yet — the line appears once {n(data.threshold)} opens land in a day
             </span>
           )
+        )}
+        {data && data.preSendBursts.length > 0 && (
+          <span title="These days cleared the 50-open threshold but were dwarfed by the send that followed, so the send moment was moved later.">
+            <strong>{data.preSendBursts.length}</strong> earlier day{data.preSendBursts.length === 1 ? "" : "s"} passed over:{" "}
+            {data.preSendBursts.map((b) => `${b.label} (${n(b.opens)} opens)`).join(", ")} — likely seed or test send
+          </span>
         )}
         {data && data.bursts.length > 0 && (
           <span>
@@ -374,7 +390,8 @@ export default function Timeline({ data, options, selectedId, range, hrefBase }:
                   <td className={styles.numeric}>{n(b.clicks)}</td>
                   <td>
                     {b.isSend && (data?.send?.source === "config" ? "Send" : "Send detected")}
-                    {b.burst !== null && `Burst · ${n(b.burst)} opens`}
+                    {b.burst !== null &&
+                      (b.burstBeforeSend ? `Passed over · ${n(b.burst)} opens · likely seed or test` : `Burst · ${n(b.burst)} opens`)}
                     {range && !inRange(b, range) && (b.isSend || b.burst !== null ? " · " : "") + "outside range"}
                   </td>
                 </tr>
@@ -549,8 +566,16 @@ function Chart({
         const y = Math.min(g.yOpens(b.opens), g.plotBottom) - 14;
         return (
           <g key={`flag-${b.key}`} transform={`translate(${cx - 5}, ${y - 10})`}>
-            <path className={styles.flag} d="M1 12V1h7l-1.5 2.5L8 6H1" />
-            <line x1={1} x2={1} y1={1} y2={12} stroke="currentColor" strokeWidth={1} className={styles.flagText} />
+            <path className={b.burstBeforeSend ? styles.flagPreSend : styles.flag} d="M1 12V1h7l-1.5 2.5L8 6H1" />
+            <line
+              x1={1}
+              x2={1}
+              y1={1}
+              y2={12}
+              stroke="currentColor"
+              strokeWidth={1}
+              className={b.burstBeforeSend ? styles.flagPreSendText : styles.flagText}
+            />
           </g>
         );
       })}

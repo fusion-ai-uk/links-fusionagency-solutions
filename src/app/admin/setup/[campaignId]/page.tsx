@@ -203,9 +203,20 @@ export default async function CampaignSetupPage({ params }: PageProps) {
       {sendDetected && send && (
         <div className={styles.notice}>
           <div className={styles.noticeHead}>Send detected — {formatUkTime(send.at)} {UK_TIME_LABEL}</div>
-          {send.detected?.opensThatDay ?? "50+"} opens landed on the live ID that day, so the send is taken to have begun at the start of that
-          burst. Events before it are pre-send; events from it are live. To confirm, Michael sets status <code>sent</code> and{" "}
-          <code>liveFrom: &quot;{send.at.toISOString()}&quot;</code> in <code>src/config/programmes.ts</code>.
+          {send.detected?.opensThatDay ?? "50+"} opens landed on the live ID that day
+          {send.detected ? ` (${send.detected.opensFirst24h} in the first 24 hours)` : ""}, so the send is taken to have begun at the start of
+          that burst. Events before it are pre-send; events from it are live.
+          {send.detected && send.detected.passedOver.length > 0 && (
+            <>
+              {" "}
+              {send.detected.passedOver.length} earlier day
+              {send.detected.passedOver.length === 1 ? "" : "s"} also passed 50 opens (
+              {send.detected.passedOver.map((b) => `${b.day} — ${b.opens}`).join("; ")}) but were far smaller than this one, so they are treated as
+              a seed or test send rather than the send itself.
+            </>
+          )}{" "}
+          To confirm, Michael sets status <code>sent</code> and <code>liveFrom: &quot;{send.at.toISOString()}&quot;</code> in{" "}
+          <code>src/config/programmes.ts</code>.
         </div>
       )}
 

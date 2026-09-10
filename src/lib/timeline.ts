@@ -49,8 +49,10 @@ export interface TimelineBucket {
   clicks: number;
   /** This bucket contains the send moment. */
   isSend: boolean;
-  /** Non-bot opens that day when the day is a later burst; null otherwise (day grain only). */
+  /** Non-bot opens that day when the day cleared the threshold; null otherwise (day grain only). */
   burst: number | null;
+  /** True when that burst sits before the send — a likely seed or test send. */
+  burstBeforeSend: boolean;
 }
 
 /** A one-click time range, anchored on the send. ISO instants, half-open [from, to). */
@@ -81,6 +83,8 @@ export interface TimelineSend {
   /** "11:04" — for the chart label in hour view. */
   clockText: string;
   opensThatDay: number | null;
+  /** Non-bot opens in the 24 hours from the send moment (detected sends only). */
+  opensFirst24h: number | null;
 }
 
 export interface TimelineData {
@@ -88,7 +92,13 @@ export interface TimelineData {
   label: string;
   send: TimelineSend | null;
   presets: RangePreset[];
+  /** Days after the send that cleared the threshold again — a resend or a prefetch. */
   bursts: (OpenBurst & { label: string })[];
+  /**
+   * Days before the send that cleared the threshold but were dwarfed by the
+   * send proper — most likely a seed list or a test to a small group.
+   */
+  preSendBursts: (OpenBurst & { label: string })[];
   threshold: number;
   totals: { opens: number; clicks: number };
   hasEvents: boolean;
@@ -121,7 +131,7 @@ function addDays(dayKey: string, days: number): string {
 function buildDaySeries(
   events: TimelineEvent[],
   send: SendInfo | null,
-  bursts: OpenBurst[],
+  bursts: (OpenBurst & { beforeSend: boolean })[],
   now: Date
 ): TimelineSeries {
   const today = ukDayKey(now);
@@ -134,6 +144,13 @@ function buildDaySeries(
 
   let start = eventDays[0] ?? sendDay!;
   let end = eventDays[eventDays.length - 1] ?? sendDay!;
+  // Days that cleared the threshold must be on screen even when the chips
+  // exclude their events — a passed-over day sits before the send, so without
+  // this the flag explaining why the send moved would never be visible.
+  for (const b of bursts) {
+    if (b.day < start) start = b.day;
+    if (b.day > end) end = b.day;
+  }
   if (sendDay) {
     if (sendDay < start) start = sendDay;
     // Show the fortnight after the send even when activity has gone quiet.
@@ -153,7 +170,7 @@ function buildDaySeries(
     truncated = true;
   }
 
-  const burstByDay = new Map(bursts.map((b) => [b.day, b.opens]));
+  const burstByDay = new Map(bursts.map((b) => [b.day, { opens: b.opens, beforeSend: b.beforeSend }]));
   const buckets: TimelineBucket[] = [];
   const index = new Map<string, number>();
   for (let key = start; key <= end; key = nextUkDay(key)) {
@@ -168,7 +185,8 @@ function buildDaySeries(
       opens: 0,
       clicks: 0,
       isSend: key === sendDay,
-      burst: key !== sendDay ? burstByDay.get(key) ?? null : null,
+      burst: key !== sendDay ? burstByDay.get(key)?.opens ?? null : null,
+      burstBeforeSend: key !== sendDay ? burstByDay.get(key)?.beforeSend ?? false : false,
     });
     if (buckets.length > MAX_DAYS) break;
   }
@@ -225,6 +243,7 @@ function buildHourSeries(events: TimelineEvent[], send: SendInfo | null): Timeli
       clicks: 0,
       isSend: key === sendHour,
       burst: null,
+      burstBeforeSend: false,
     });
   }
 
@@ -265,9 +284,14 @@ export function buildTimeline(options: {
   const threshold =
     getCampaignDefinition(options.campaignId)?.detectSendAtOpens ?? SEND_DETECTION_MIN_OPENS_PER_DAY;
   const sendDay = options.send ? ukDayKey(options.send.at) : null;
-  const bursts = findBursts(options.opensByDay ?? new Map(), threshold)
-    .filter((b) => b.day !== sendDay)
-    .map((b) => ({ ...b, label: formatUkDayShort(b.day) }));
+  const withLabel = (b: OpenBurst) => ({ ...b, label: formatUkDayShort(b.day) });
+  const qualifying = findBursts(options.opensByDay ?? new Map(), threshold).filter((b) => b.day !== sendDay);
+  // Days the detector passed over sit before the send; anything after it is a
+  // later burst. With a config send date there is nothing to have passed over,
+  // so days before it are simply reported as bursts.
+  const passedOver = new Set((options.send?.detected?.passedOver ?? []).map((b) => b.day));
+  const bursts = qualifying.filter((b) => !passedOver.has(b.day)).map(withLabel);
+  const preSendBursts = qualifying.filter((b) => passedOver.has(b.day)).map(withLabel);
 
   const send: TimelineSend | null = options.send
     ? {
@@ -277,6 +301,7 @@ export function buildTimeline(options: {
         dayText: formatUkDayShort(sendDay!),
         clockText: formatUkClock(options.send.at),
         opensThatDay: options.send.detected?.opensThatDay ?? options.opensByDay?.get(sendDay!) ?? null,
+        opensFirst24h: options.send.detected?.opensFirst24h ?? null,
       }
     : null;
 
@@ -305,10 +330,19 @@ export function buildTimeline(options: {
     send,
     presets,
     bursts,
+    preSendBursts,
     threshold,
     totals: { opens, clicks },
     hasEvents: options.events.length > 0,
-    day: buildDaySeries(options.events, options.send, bursts, now),
+    day: buildDaySeries(
+      options.events,
+      options.send,
+      [
+        ...bursts.map((b) => ({ ...b, beforeSend: false })),
+        ...preSendBursts.map((b) => ({ ...b, beforeSend: true })),
+      ],
+      now
+    ),
     hour: buildHourSeries(options.events, options.send),
   };
 }

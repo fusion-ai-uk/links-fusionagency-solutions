@@ -103,6 +103,7 @@ cp .env.example .env
 | `DATABASE_URL` | Vercel sets this too | Present on Vercel but Prisma uses the two vars above |
 | `ADMIN_PASSWORD` | Yes | Password for michael@fusionagency.solutions |
 | `STEVEN_PASSWORD` | For Steven | Password for steven@fusionagency.solutions |
+| `MARY_PASSWORD` | For Mary | Password for mary@fusionagency.solutions |
 | `IP_HASH_SECRET` | Yes | Secret for HMAC-hashing client IPs (e.g. `openssl rand -hex 32`) |
 
 Locally, set `DATABASE_POSTGRES_PRISMA_URL` and `DATABASE_URL_UNPOOLED` to the same Postgres URL (or use `vercel env pull .env.local`).
@@ -145,6 +146,7 @@ You must add these manually in **Vercel → Settings → Environment Variables**
 |----------|-------|
 | `ADMIN_PASSWORD` | Michael's dashboard password |
 | `STEVEN_PASSWORD` | Steven's dashboard password |
+| `MARY_PASSWORD` | Mary's dashboard password |
 | `IP_HASH_SECRET` | Random 32+ byte hex string; **must stay stable** or historical IP hashes become incomparable |
 
 After adding storage or env vars, **redeploy** so serverless functions receive them. The build runs `prisma migrate deploy` to create tables automatically.
@@ -259,6 +261,7 @@ password, so no password is ever committed.
 |-------|------|------|-------------------|
 | michael@fusionagency.solutions | Michael | `admin` | `ADMIN_PASSWORD` |
 | steven@fusionagency.solutions | Steven | `build` | `STEVEN_PASSWORD` |
+| mary@fusionagency.solutions | Mary | `build` | `MARY_PASSWORD` |
 
 ### What the roles can do
 
@@ -426,17 +429,40 @@ per row and always includes the `-test` twin of each requested campaign.
 Nobody tells the app when an email goes out, so it watches for the moment
 itself (`src/lib/send-detection.ts`):
 
-- The first UK calendar day with **50 or more non-bot opens** on the live
-  campaign ID is the send day (`SEND_DETECTION_MIN_OPENS_PER_DAY`; a campaign
-  can lower it with `detectSendAtOpens`).
-- Within that day the send moment is the earliest open followed by a burst —
-  at least `max(3, threshold/10)` opens within 30 minutes.
+**1. Volume floor.** Only a UK calendar day with at least **50 non-bot opens**
+on the live campaign ID can be a send day (`SEND_DETECTION_MIN_OPENS_PER_DAY`;
+a campaign can lower it with `detectSendAtOpens`). The pre-send trickle never
+qualifies, however long it goes on.
+
+**2. Recalibration.** A day that scrapes past the floor and is then dwarfed by
+the days after it was probably not the send — a seed list, a test to a small
+group, or a false start. Among the qualifying days in the first
+`SEND_COMPARISON_DAYS` (7), each day's opens in the **24 hours from its own
+burst start** are compared, and the send is the earliest day reaching at least
+`SEND_SHARE_OF_PEAK` (20%) of the largest.
+
+| Opens per day | Send day | Why |
+|---|---|---|
+| 60, 800, 1 200, 400, 200 | the **800** day | 60 is too small to be the real send; 1 200 is the normal day-after peak |
+| 300, 350, 100 | the **300** day | nothing later dwarfs it |
+| 60, 70, 80 | the **60** day | no day dwarfs another, so the first qualifying day stands |
+
+A rolling 24 hours rather than the calendar day means a late-afternoon send
+whose opens land the next morning is not passed over for the wrong reason. The
+one-week window means a resend a month later cannot drag the send earlier.
+
+- Within the chosen day the send moment is the earliest open followed by a
+  burst — at least `max(3, threshold/10)` opens within 30 minutes.
 - The detected moment is used as `liveFrom` **only while the status is not yet
   `sent`**. Recording the send in config takes over; where they differ, config
   wins.
-- Later days at or above the threshold are reported as **bursts** (resend,
-  reminder, or a mail provider pre-fetching images) and flagged on the
-  timeline; they change nothing.
+- Qualifying days **before** the send are reported as `passedOver` and flagged
+  violet on the timeline (likely seed or test send). Days **after** it that
+  clear the floor again are reported as **bursts** and flagged orange (resend,
+  reminder, or a mail provider pre-fetching images). Neither is hidden and
+  neither changes a figure.
+- Everything is recomputed on every page load, so the answer recalibrates as
+  data arrives.
 
 The dashboard marks a detected send on the email row ("Send detected"), on the
 setup page (with the exact `liveFrom` value to paste into config), and on the

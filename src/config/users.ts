@@ -48,6 +48,14 @@ export const USERS: AppUser[] = [
     role: "build",
     passwordEnv: "STEVEN_PASSWORD",
   },
+  {
+    // Reporting access. Change this role to "admin" if Mary needs the raw
+    // CSV export (it carries hashed IPs and user agents).
+    email: "mary@fusionagency.solutions",
+    name: "Mary",
+    role: "build",
+    passwordEnv: "MARY_PASSWORD",
+  },
 ];
 
 export function findUserByEmail(email: string): AppUser | null {
