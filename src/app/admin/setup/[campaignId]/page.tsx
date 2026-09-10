@@ -204,8 +204,12 @@ export default async function CampaignSetupPage({ params }: PageProps) {
         <div className={styles.notice}>
           <div className={styles.noticeHead}>Send detected — {formatUkTime(send.at)} {UK_TIME_LABEL}</div>
           {send.detected?.opensThatDay ?? "50+"} opens landed on the live ID that day
-          {send.detected ? ` (${send.detected.opensFirst24h} in the first 24 hours)` : ""}, so the send is taken to have begun at the start of
-          that burst. Events before it are pre-send; events from it are live.
+          {send.detected ? ` (${send.detected.opensFirst24h} in the first 24 hours)` : ""}
+          {send.detected?.peakOpens ? `, against a busiest day of ${send.detected.peakOpens}` : ""}, so the send is taken to have begun at the
+          start of that burst.{" "}
+          {send.applied
+            ? "Events before it are pre-send; events from it are live."
+            : "This email has no live-from recorded, so every event on it counts as live — the moment is shown for information only."}
           {send.detected && send.detected.passedOver.length > 0 && (
             <>
               {" "}

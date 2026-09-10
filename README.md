@@ -434,35 +434,53 @@ on the live campaign ID can be a send day (`SEND_DETECTION_MIN_OPENS_PER_DAY`;
 a campaign can lower it with `detectSendAtOpens`). The pre-send trickle never
 qualifies, however long it goes on.
 
-**2. Recalibration.** A day that scrapes past the floor and is then dwarfed by
-the days after it was probably not the send — a seed list, a test to a small
-group, or a false start. Among the qualifying days in the first
-`SEND_COMPARISON_DAYS` (7), each day's opens in the **24 hours from its own
-burst start** are compared, and the send is the earliest day reaching at least
-`SEND_SHARE_OF_PEAK` (20%) of the largest.
+**2. Share of the peak day.** A day that clears the floor but is dwarfed by a
+busier day near it was a seed list, a test to a small group, or a false start.
+The send is the **earliest qualifying day holding at least a third**
+(`SEND_SHARE_OF_PEAK_DAY`) of the busiest day within `SEND_PEAK_SCOPE_DAYS`
+(14) ahead of it, considering candidates within `SEND_COMPARISON_DAYS` (7).
 
 | Opens per day | Send day | Why |
 |---|---|---|
-| 60, 800, 1 200, 400, 200 | the **800** day | 60 is too small to be the real send; 1 200 is the normal day-after peak |
-| 300, 350, 100 | the **300** day | nothing later dwarfs it |
-| 60, 70, 80 | the **60** day | no day dwarfs another, so the first qualifying day stands |
+| 57, 600 | the **600** day | 57 is a tenth of 600 — a test, not a send |
+| 60, 800, 1 200, 400, 200 | the **800** day | 60 is far too small; 1 200 is the normal day-after peak |
+| 300, 350, 100 | the **300** day | nothing dwarfs it |
+| 60, 70, 80 | the **60** day | no day dwarfs another |
 
-A rolling 24 hours rather than the calendar day means a late-afternoon send
-whose opens land the next morning is not passed over for the wrong reason. The
-one-week window means a resend a month later cannot drag the send earlier.
+Days are compared on **calendar-day totals**, the way the chart reads. An
+earlier version compared a rolling 24 hours from each candidate's burst start,
+which let a late-afternoon test send borrow the following morning's surge and
+win. The cost of calendar days is that a send going out late in the evening,
+whose opens mostly land next morning, is dated to that next day — recording
+`liveFrom` in config fixes such a case exactly, and the evening is still
+reported as a passed-over day rather than hidden.
 
 - Within the chosen day the send moment is the earliest open followed by a
   burst — at least `max(3, threshold/10)` opens within 30 minutes.
 - The detected moment is used as `liveFrom` **only while the status is not yet
   `sent`**. Recording the send in config takes over; where they differ, config
-  wins.
-- Qualifying days **before** the send are reported as `passedOver` and flagged
-  violet on the timeline (likely seed or test send). Days **after** it that
-  clear the floor again are reported as **bursts** and flagged orange (resend,
-  reminder, or a mail provider pre-fetching images). Neither is hidden and
-  neither changes a figure.
+  wins. On a historic send with `liveFrom: null` everything counts as live, so
+  a detected moment there is labelled **for information only**
+  (`applied: false` on `SendInfo`) and no pre-send shading is drawn.
+- Qualifying days **before** the send are reported by `findPreSendDays` and
+  flagged violet on the timeline (likely seed or test send).
 - Everything is recomputed on every page load, so the answer recalibrates as
   data arrives.
+
+### Bursts
+
+A send decays — hundreds, then dozens, then a trickle — and none of that is a
+burst, however far above the floor it sits. The day after a send is often the
+biggest day of all. `findBursts` therefore flags a day only when it is a
+**return**: after the send day, above the floor, higher than the day before,
+and at least `BURST_RISE_FACTOR` (3) times the baseline, where the baseline is
+`max(previous day, median of the previous three days)`. Taking the previous day
+into account is what stops the normal day-after peak — whose two preceding days
+are empty — from being read as a burst.
+
+A burst is usually a resend or reminder, the client forwarding the email
+internally, or a mail provider pre-fetching images for a batch of inboxes. The
+data cannot say which; the flag says look, not why. Bursts change no figure.
 
 The dashboard marks a detected send on the email row ("Send detected"), on the
 setup page (with the exact `liveFrom` value to paste into config), and on the

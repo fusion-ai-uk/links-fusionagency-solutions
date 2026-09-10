@@ -606,101 +606,24 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
               )}
             </p>
           </div>
-          <div className={styles.whereGrid}>
-            <WorldMap counts={view.countryCounts} selected={countries} hrefBase={countryHrefBase} pathname="/admin" />
-            <div className={styles.whereTables}>
-              <div className={styles.tableScroll} style={{ maxHeight: 340 }}>
-                <table className={styles.table}>
-                  <thead>
-                    <tr>
-                      <th>Country</th>
-                      <th className={styles.numeric}>Opens</th>
-                      <th className={styles.numeric}>Clicks</th>
-                      <th className={styles.numeric}>
-                        Devices
-                        <InfoTip topic="approxUnique" />
-                      </th>
-                      <th className={styles.numeric}>Share</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {view.countryCounts.length === 0 && (
-                      <tr>
-                        <td colSpan={5} className={styles.empty}>
-                          Nothing counted in this view.
-                        </td>
-                      </tr>
-                    )}
-                    {view.countryCounts.map((c) => {
-                      const on = countries.includes(c.code);
-                      const next = on ? countries.filter((x) => x !== c.code) : [...countries, c.code];
-                      return (
-                        <tr key={c.code} className={on ? styles.rowSelected : undefined}>
-                          <td>
-                            <Link
-                              href={buildHref("/admin", { ...commonParts, country: next, from: rangeIso.from, to: rangeIso.to })}
-                              className={styles.rowHead}
-                              style={{ textDecoration: "none" }}
-                              title={on ? "Remove from the country filter" : "Filter to this country"}
-                            >
-                              {on && <Icon name="check" size={12} style={{ color: "var(--accent-cyan)", marginRight: "0.35rem" }} />}
-                              {countryName(c.code)}
-                            </Link>
-                            {c.code !== UNKNOWN_COUNTRY && <span className={styles.rowNote}>{c.code}</span>}
-                          </td>
-                          <td className={styles.numeric}>{n(c.opens)}</td>
-                          <td className={styles.numeric}>{n(c.clicks)}</td>
-                          <td className={styles.numeric}>{n(c.devices)}</td>
-                          <td className={styles.numeric}>
-                            {c.code === UNKNOWN_COUNTRY || totalLocated === 0 ? "—" : `${(((c.opens + c.clicks) / totalLocated) * 100).toFixed(1)}%`}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-              <div className={styles.tableScroll} style={{ maxHeight: 300 }}>
-                <table className={styles.table}>
-                  <thead>
-                    <tr>
-                      <th>
-                        Place
-                        <InfoTip topic="location" />
-                      </th>
-                      <th>Country</th>
-                      <th className={styles.numeric}>Opens</th>
-                      <th className={styles.numeric}>Clicks</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {view.places.length === 0 && (
-                      <tr>
-                        <td colSpan={4} className={styles.empty}>
-                          No places to show.
-                        </td>
-                      </tr>
-                    )}
-                    {view.places.map((p) => (
-                      <tr key={`${p.country}|${p.region ?? ""}|${p.city ?? ""}`}>
-                        <td>
-                          <span className={styles.rowHead}>{p.city ?? (p.region ? p.region : "Unknown place")}</span>
-                          {p.city && p.region && <span className={styles.rowNote}>{p.region}</span>}
-                        </td>
-                        <td>{p.country === UNKNOWN_COUNTRY ? "—" : p.country}</td>
-                        <td className={styles.numeric}>{n(p.opens)}</td>
-                        <td className={styles.numeric}>{n(p.clicks)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+          <WorldMap counts={view.countryCounts} selected={countries} hrefBase={countryHrefBase} pathname="/admin" />
+
+          {/* Tables side by side under the map. Long lists show their busiest
+              rows and tuck the rest into a disclosure, so nothing scrolls
+              inside anything else. */}
+          <div className={styles.whereTables}>
+            <CountryTable
+              rows={view.countryCounts}
+              selected={countries}
+              totalLocated={totalLocated}
+              hrefFor={(next) => buildHref("/admin", { ...commonParts, country: next, from: rangeIso.from, to: rangeIso.to })}
+            />
+            <PlaceTable rows={view.places} scoped={countries.length > 0} />
           </div>
+
           <p className={styles.sourceLine}>
             Location is the network each request came from, so opens routed through a mail provider (Apple, Gmail) show as that provider&rsquo;s
-            country. Clicks are the better guide to where readers are. Share is of located opens + clicks. Places are the busiest {view.places.length}{" "}
-            {countries.length > 0 ? "within the selected countries" : "everywhere"}.
+            country — switch the map to <em>Clicks</em> for a truer picture of where readers are. Share is of located opens + clicks.
           </p>
         </section>
 
@@ -1093,6 +1016,180 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
   );
 }
 
+/** How many rows each Where table shows before the rest is tucked away. */
+const COUNTRY_ROWS = 8;
+const PLACE_ROWS = 10;
+
+function CountryTable({
+  rows,
+  selected,
+  totalLocated,
+  hrefFor,
+}: {
+  rows: DashboardView["countryCounts"];
+  selected: string[];
+  totalLocated: number;
+  hrefFor: (next: string[]) => string;
+}) {
+  const head = (
+    <thead>
+      <tr>
+        <th>Country</th>
+        <th className={styles.numeric}>Opens</th>
+        <th className={styles.numeric}>Clicks</th>
+        <th className={styles.numeric}>
+          Devices
+          <InfoTip topic="approxUnique" />
+        </th>
+        <th className={styles.numeric}>Share</th>
+      </tr>
+    </thead>
+  );
+
+  const row = (c: DashboardView["countryCounts"][number]) => {
+    const on = selected.includes(c.code);
+    const next = on ? selected.filter((x) => x !== c.code) : [...selected, c.code];
+    return (
+      <tr key={c.code} className={on ? styles.rowSelected : undefined}>
+        <td>
+          <Link
+            href={hrefFor(next)}
+            className={styles.rowHead}
+            style={{ textDecoration: "none" }}
+            title={on ? "Remove from the country filter" : "Filter to this country"}
+          >
+            {on && <Icon name="check" size={12} style={{ color: "var(--accent-cyan)", marginRight: "0.35rem" }} />}
+            {countryName(c.code)}
+          </Link>
+          {c.code !== UNKNOWN_COUNTRY && <span className={styles.rowNote}>{c.code}</span>}
+        </td>
+        <td className={styles.numeric}>{n(c.opens)}</td>
+        <td className={styles.numeric}>{n(c.clicks)}</td>
+        <td className={styles.numeric}>{n(c.devices)}</td>
+        <td className={styles.numeric}>
+          {c.code === UNKNOWN_COUNTRY || totalLocated === 0 ? "—" : `${(((c.opens + c.clicks) / totalLocated) * 100).toFixed(1)}%`}
+        </td>
+      </tr>
+    );
+  };
+
+  // Selected countries are always visible, wherever they sit in the order.
+  const pinned = rows.filter((c) => selected.includes(c.code));
+  const shown = [...pinned, ...rows.filter((c) => !selected.includes(c.code))].slice(0, Math.max(COUNTRY_ROWS, pinned.length));
+  const shownCodes = new Set(shown.map((c) => c.code));
+  const rest = rows.filter((c) => !shownCodes.has(c.code));
+
+  return (
+    <div className={styles.whereTable}>
+      <h3 className={styles.whereTableTitle}>
+        <Icon name="globe" size={13} /> By country
+      </h3>
+      {rows.length === 0 ? (
+        <p className={styles.emptyState}>
+          <strong>Nothing counted in this view.</strong> Switch a chip on, widen the time range, or choose Everywhere.
+        </p>
+      ) : (
+        <>
+          <table className={styles.table}>
+            {head}
+            <tbody>{shown.map(row)}</tbody>
+          </table>
+          {rest.length > 0 && (
+            <details className={styles.moreRows}>
+              <summary>
+                Show {rest.length} more {rest.length === 1 ? "country" : "countries"}
+              </summary>
+              <table className={styles.table}>
+                {head}
+                <tbody>{rest.map(row)}</tbody>
+              </table>
+            </details>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+function PlaceTable({ rows, scoped }: { rows: DashboardView["places"]; scoped: boolean }) {
+  const head = (
+    <thead>
+      <tr>
+        <th>
+          Place
+          <InfoTip topic="location" />
+        </th>
+        <th>Country</th>
+        <th className={styles.numeric}>Opens</th>
+        <th className={styles.numeric}>Clicks</th>
+      </tr>
+    </thead>
+  );
+
+  const row = (p: DashboardView["places"][number]) => (
+    <tr key={`${p.country}|${p.region ?? ""}|${p.city ?? ""}`}>
+      <td>
+        <span className={styles.rowHead}>{p.city ?? p.region}</span>
+        {p.city && p.region && <span className={styles.rowNote}>{p.region}</span>}
+      </td>
+      <td title={p.country === UNKNOWN_COUNTRY ? undefined : countryName(p.country)}>
+        {p.country === UNKNOWN_COUNTRY ? "—" : p.country}
+      </td>
+      <td className={styles.numeric}>{n(p.opens)}</td>
+      <td className={styles.numeric}>{n(p.clicks)}</td>
+    </tr>
+  );
+
+  // Rows with no city or region tell you nothing as rows; they are worth one
+  // line underneath so the table is not swamped by them.
+  const named = rows.filter((p) => p.city || p.region);
+  const unnamed = rows.filter((p) => !p.city && !p.region);
+  const unnamedOpens = unnamed.reduce((s, p) => s + p.opens, 0);
+  const unnamedClicks = unnamed.reduce((s, p) => s + p.clicks, 0);
+  const shown = named.slice(0, PLACE_ROWS);
+  const rest = named.slice(PLACE_ROWS);
+
+  return (
+    <div className={styles.whereTable}>
+      <h3 className={styles.whereTableTitle}>
+        <Icon name="pin" size={13} /> By place {scoped ? "(selected countries)" : ""}
+      </h3>
+      {named.length === 0 ? (
+        <p className={styles.emptyState}>
+          <strong>No cities or regions reported.</strong>{" "}
+          {unnamed.length > 0
+            ? "Every counted event here carried a country but no finer location — usual for opens routed through a mail provider."
+            : "Places appear once located opens or clicks are counted."}
+        </p>
+      ) : (
+        <>
+          <table className={styles.table}>
+            {head}
+            <tbody>{shown.map(row)}</tbody>
+          </table>
+          {rest.length > 0 && (
+            <details className={styles.moreRows}>
+              <summary>
+                Show {rest.length} more {rest.length === 1 ? "place" : "places"}
+              </summary>
+              <table className={styles.table}>
+                {head}
+                <tbody>{rest.map(row)}</tbody>
+              </table>
+            </details>
+          )}
+        </>
+      )}
+      {unnamed.length > 0 && (
+        <p className={styles.sourceLine} style={{ marginTop: "0.5rem" }}>
+          A further {n(unnamedOpens)} open{unnamedOpens === 1 ? "" : "s"} and {n(unnamedClicks)} click{unnamedClicks === 1 ? "" : "s"} carried a
+          country but no city or region — usual where a mail provider loads images from its own servers.
+        </p>
+      )}
+    </div>
+  );
+}
+
 function WaveRow({
   row,
   view,
@@ -1139,19 +1236,23 @@ function WaveRow({
           <span
             className={styles.rowNoteAccent}
             title={[
-              `${send.detected?.opensThatDay ?? "50+"} opens on the send day`,
+              `${send.detected?.opensThatDay ?? "50+"} opens on the send day, against a busiest day of ${send.detected?.peakOpens ?? "?"}`,
               send.detected ? `${send.detected.opensFirst24h} in the first 24 hours` : null,
               send.detected && send.detected.passedOver.length > 0
-                ? `${send.detected.passedOver.length} earlier day(s) over the threshold were passed over as too small to be the send (${send.detected.passedOver
+                ? `${send.detected.passedOver.length} earlier day(s) cleared the 50-open floor but held less than a third of that busiest day, so they were passed over as a likely seed or test (${send.detected.passedOver
                     .map((b) => `${b.day}: ${b.opens}`)
                     .join(", ")})`
                 : null,
-              "Counting live from this moment until the send is recorded in config (status sent + liveFrom).",
+              send.applied
+                ? "Counting live from this moment until the send is recorded in config (status sent + liveFrom)."
+                : "This email has no live-from recorded, so everything on it counts as live; the moment is shown for information only.",
             ]
               .filter(Boolean)
               .join(". ")}
           >
-            {`// send detected ${formatUkTime(send.at)} ${UK_TIME_LABEL} — live from then; confirm in config`}
+            {`// send detected ${formatUkTime(send.at)} ${UK_TIME_LABEL} — ${
+              send.applied ? "live from then; confirm in config" : "for information; everything on this email counts as live"
+            }`}
           </span>
         )}
       </td>
@@ -1164,8 +1265,15 @@ function WaveRow({
         {sendDetected && (
           <>
             {" "}
-            <span className={`${styles.pill} ${styles.pillSent}`} title="Detected from a burst of opens; see Send detection">
-              <Icon name="send" size={10} /> Send detected
+            <span
+              className={`${styles.pill} ${send?.applied ? styles.pillSent : styles.pillPending}`}
+              title={
+                send?.applied
+                  ? "Detected from the data and used as this email's live-from until the send is recorded in config; see Send detection"
+                  : "Detected from the data, shown for information only — this email has no live-from, so everything on it counts as live"
+              }
+            >
+              <Icon name="send" size={10} /> Send detected{send?.applied ? "" : " (info)"}
             </span>
           </>
         )}

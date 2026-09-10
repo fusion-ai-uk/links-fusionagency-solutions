@@ -97,6 +97,14 @@ export interface SendInfo {
   source: SendSource;
   /** Present when the send was found in the data (even if config later confirmed it). */
   detected: DetectedSend | null;
+  /**
+   * Whether this moment actually decides what counts as live. A config
+   * live-from always does. A detected send does only while the email is not
+   * yet marked sent; on a historic send that predates the rule (liveFrom:
+   * null) everything counts as live, so a detected moment is shown for
+   * information and changes nothing.
+   */
+  applied: boolean;
 }
 
 export interface ConfidenceResult {
@@ -187,9 +195,17 @@ function describeSends(
     const config = getLiveWindow(cid);
     const found = detected.get(cid) ?? null;
     if (config?.from) {
-      sends.set(cid, { campaignId: cid, at: config.from, source: "config", detected: found });
+      sends.set(cid, { campaignId: cid, at: config.from, source: "config", detected: found, applied: true });
     } else if (found) {
-      sends.set(cid, { campaignId: cid, at: found.at, source: "detected", detected: found });
+      // Substituted for a missing live-from only when config says the email is
+      // not yet sent; on a historic send everything counts as live regardless.
+      sends.set(cid, {
+        campaignId: cid,
+        at: found.at,
+        source: "detected",
+        detected: found,
+        applied: config !== null && config.from === null,
+      });
     }
   }
   return sends;
@@ -333,7 +349,7 @@ export async function loadConfidence(
     if (result.sends.has(cid)) continue;
     const config = getLiveWindow(cid);
     if (config?.from) {
-      result.sends.set(cid, { campaignId: cid, at: config.from, source: "config", detected: null });
+      result.sends.set(cid, { campaignId: cid, at: config.from, source: "config", detected: null, applied: true });
     }
   }
   return { ...result, events };

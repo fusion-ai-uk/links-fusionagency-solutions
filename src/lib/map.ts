@@ -55,10 +55,16 @@ interface ViewSpec {
   graticuleStep: number;
 }
 
+/**
+ * Every frame is landscape, so the map sits comfortably in a dashboard panel
+ * rather than towering over it. The region is fitted inside its frame and the
+ * spare width fills with real neighbouring geography (clipped at the edge),
+ * which is more useful than empty sea.
+ */
 const VIEW_SPECS: Record<MapView, ViewSpec> = {
   world: { resolution: "110m", box: [-180, 180, -90, 90], width: 960, height: 470, graticuleStep: 20 },
-  europe: { resolution: "50m", box: [-12, 35, 34, 62], width: 960, height: 620, graticuleStep: 10 },
-  uk: { resolution: "50m", box: [-11, 3, 49.5, 61], width: 960, height: 760, graticuleStep: 5 },
+  europe: { resolution: "50m", box: [-11, 32, 35, 61], width: 960, height: 560, graticuleStep: 10 },
+  uk: { resolution: "50m", box: [-11, 2, 49.8, 59.5], width: 960, height: 540, graticuleStep: 5 },
 };
 
 let cached: WorldMapPaths | null = null;

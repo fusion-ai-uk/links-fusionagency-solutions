@@ -257,13 +257,25 @@ export const HELP = {
       "Nobody tells the system when an email goes out, so it works it out: a day needs at least 50 opens to count as a send at all, and where a modest day is dwarfed by the days that follow, the send moves to the first genuinely big one. Recording the send in config confirms it.",
     detail: [
       "Two rules, in order. First a volume floor: only a UK calendar day with at least 50 non-bot opens can be the send day, so the pre-send trickle from the build team never qualifies however long it goes on.",
-      "Then recalibration. A day that scrapes past 50 and is then dwarfed by the next day was probably not the send — a seed list, a test to a small group, or a false start. Among the qualifying days in the first week, each day's opens in the 24 hours from its own burst start are compared, and the send is the earliest day that reaches at least a fifth of the largest.",
-      "So 60 opens, then 800, then 1,200, then 400 makes the 800 day the send: the 60 is too small to be the real thing, and the 1,200 is the day after a send, which is normal. Whereas 300, then 350, then 100 keeps the 300 day, because nothing later dwarfs it.",
-      "The comparison uses a rolling 24 hours rather than the calendar day, so a late-afternoon send whose opens mostly land the next morning is not passed over for the wrong reason. The window is one week, so a resend a month later cannot drag the send date earlier.",
+      "Then share of the peak. A day that clears the floor but is dwarfed by a busier day near it was not the send — it is a seed list, a test to a small group, or a false start. The send is the earliest qualifying day that holds at least a third of the busiest day around it.",
+      "So 57 opens followed by a day of 600 puts the send on the 600 day: 57 is a tenth of it, which is a test, not a send. Whereas 800 followed by 1,200 puts the send on the 800 day, because 800 is two thirds of 1,200 — a normal send followed by its normal day-after peak. And 300, 350, 100 keeps the 300 day, since nothing dwarfs it.",
+      "Days are compared on their calendar-day totals, the way you read the chart. The one exception worth knowing: a send that goes out late in the evening, whose opens mostly land the next morning, will be dated to that next morning. Recording the send in config fixes such a case exactly.",
       "Within the chosen day, the send moment is the earliest open followed by a burst — at least five more opens within half an hour. Anything on the live ID before that moment is pre-send; everything from it is live. This is what stops the build team's checks on the morning of the send being counted as recipients.",
-      "Days that were passed over are still shown on the timeline, flagged in violet and labelled as a likely seed or test send. Days after the send that clear the threshold again are flagged in orange as bursts: a resend, a reminder, or a mail provider pre-fetching images for many inboxes at once. Neither is ever hidden, and neither changes a figure.",
-      "Everything is recalculated on every page load, so the answer recalibrates as more data arrives. A detected send is used only while the email's status has not yet been moved to Sent; once the send is recorded in config with its live-from moment, config takes over. Where the two differ, config wins.",
+      "Days that were passed over are still shown on the timeline, flagged in violet and labelled as a likely seed or test send. Nothing is hidden, and no flag changes a figure.",
+      "Everything is recalculated on every page load, so the answer recalibrates as more data arrives. A detected send is used as the live-from only while the email's status has not yet been moved to Sent; once the send is recorded in config, config takes over. On a historic send that predates this rule everything counts as live anyway, so a detected moment there is labelled for information only.",
       "The 50-open floor can be lowered per email for a small audience.",
+    ],
+  },
+
+  bursts: {
+    label: "Bursts",
+    short:
+      "A day after the send when opens climb back against the trend — at least three times the days before it, and above the 50-open floor. A send's own decay is never a burst, however large the numbers.",
+    detail: [
+      "Opens after a send fall away: hundreds, then dozens, then a trickle. None of that is a burst, and the day after a send is often the biggest day of all — that is simply how a send behaves.",
+      "A burst is a return. A day is flagged when it clears the 50-open floor, rises above the day before it, and reaches at least three times the median of the three days before it.",
+      "The usual causes are a resend or reminder to the same list, the client forwarding the email internally, or a mail provider pre-fetching images for a batch of inboxes at once. Which of those it was cannot be told from the data alone — the flag says look, not why.",
+      "Bursts are marked in orange on the timeline and listed under it. They never change a figure.",
     ],
   },
 
@@ -274,7 +286,7 @@ export const HELP = {
     detail: [
       "Bars are opens, read against the left axis. The line is clicks, read against the right axis — clicks are usually a small fraction of opens, so sharing one axis would flatten them to nothing.",
       "By day shows the whole life of the email. By hour zooms to the three days around the send, where the shape of the send itself is visible: the moment it went out, the first hour's spike, and the tail.",
-      "The dashed line is the send moment, from config if recorded, otherwise as detected in the data (labelled Detected). A flag on a later day means that day also had 50 or more opens — see Send detection.",
+      "The dashed line is the send moment, from config if recorded, otherwise as detected in the data (labelled Detected). A violet flag marks a day before the send that was passed over as a likely seed or test; an orange flag marks a burst — a day after the send when opens climbed back against the trend. See Send detection and Bursts.",
       "The timeline shows one email at a time on purpose. Overlaying emails hides the shape of each; pick the email from the dropdown, or click an email's name in the table.",
       "Hover or tap a bar for the exact figures. The table view underneath gives the same numbers as text.",
     ],
@@ -387,6 +399,7 @@ export const GUIDE_ORDER: HelpId[] = [
   "timeline",
   "timeRange",
   "sendDetection",
+  "bursts",
   "countries",
   "map",
   "location",

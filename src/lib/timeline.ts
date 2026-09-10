@@ -2,6 +2,7 @@ import { getCampaignDefinition } from "@/config/programmes";
 import type { SendInfo } from "@/lib/confidence";
 import {
   findBursts,
+  findPreSendDays,
   SEND_DETECTION_MIN_OPENS_PER_DAY,
   type OpenBurst,
 } from "@/lib/send-detection";
@@ -85,6 +86,10 @@ export interface TimelineSend {
   opensThatDay: number | null;
   /** Non-bot opens in the 24 hours from the send moment (detected sends only). */
   opensFirst24h: number | null;
+  /** The busiest day the send day was measured against (detected sends only). */
+  peakOpens: number | null;
+  /** False when the moment is shown for information and does not gate the figures. */
+  applied: boolean;
 }
 
 export interface TimelineData {
@@ -285,13 +290,11 @@ export function buildTimeline(options: {
     getCampaignDefinition(options.campaignId)?.detectSendAtOpens ?? SEND_DETECTION_MIN_OPENS_PER_DAY;
   const sendDay = options.send ? ukDayKey(options.send.at) : null;
   const withLabel = (b: OpenBurst) => ({ ...b, label: formatUkDayShort(b.day) });
-  const qualifying = findBursts(options.opensByDay ?? new Map(), threshold).filter((b) => b.day !== sendDay);
-  // Days the detector passed over sit before the send; anything after it is a
-  // later burst. With a config send date there is nothing to have passed over,
-  // so days before it are simply reported as bursts.
-  const passedOver = new Set((options.send?.detected?.passedOver ?? []).map((b) => b.day));
-  const bursts = qualifying.filter((b) => !passedOver.has(b.day)).map(withLabel);
-  const preSendBursts = qualifying.filter((b) => passedOver.has(b.day)).map(withLabel);
+  const byDay = options.opensByDay ?? new Map<string, number>();
+  // Before the send: a seed list, a test, or a false start. After it: only days
+  // that rise sharply against the trend, so a send's own decay is never flagged.
+  const preSendBursts = findPreSendDays(byDay, sendDay, threshold).map(withLabel);
+  const bursts = findBursts(byDay, sendDay, threshold).map(withLabel);
 
   const send: TimelineSend | null = options.send
     ? {
@@ -302,6 +305,8 @@ export function buildTimeline(options: {
         clockText: formatUkClock(options.send.at),
         opensThatDay: options.send.detected?.opensThatDay ?? options.opensByDay?.get(sendDay!) ?? null,
         opensFirst24h: options.send.detected?.opensFirst24h ?? null,
+        peakOpens: options.send.detected?.peakOpens ?? null,
+        applied: options.send.applied,
       }
     : null;
 

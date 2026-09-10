@@ -29,7 +29,7 @@ const VIEW_STORAGE = "dashboard:map:view";
  * the browser for a day, so a new shape must arrive under a new URL — and a
  * stale cached copy is detected and re-fetched rather than trusted.
  */
-const MAP_PATHS_VERSION = 2;
+const MAP_PATHS_VERSION = 3;
 const MAP_PATHS_URL = `/admin/map-paths?v=${MAP_PATHS_VERSION}`;
 
 let cachedPaths: WorldMapPaths | null = null;
@@ -102,6 +102,14 @@ export default function WorldMap({ counts, selected, hrefBase, pathname }: World
   const total = useMemo(() => counts.reduce((s, c) => s + c[metric], 0), [counts, metric]);
   const unknown = byCode.get(UNKNOWN_COUNTRY);
   const selectedSet = new Set(selected);
+  const located = counts.filter((c) => c.code !== UNKNOWN_COUNTRY);
+  const withData = located.filter((c) => c[metric] > 0).length;
+  const busiest = useMemo(() => {
+    const top = [...located].sort((a, b) => b[metric] - a[metric])[0];
+    if (!top || top[metric] === 0 || !paths) return null;
+    const named = paths.views.world.features.find((f) => f.code === top.code);
+    return { name: named?.name ?? top.code, code: top.code };
+  }, [located, metric, paths]);
 
   function remember(key: string, value: string) {
     try {
@@ -124,7 +132,7 @@ export default function WorldMap({ counts, selected, hrefBase, pathname }: World
 
   // Square-root scale: a country with a quarter of the maximum reads as half as strong,
   // which keeps the many small countries visible next to the one big one.
-  const intensity = (value: number) => (max === 0 ? 0 : 0.18 + 0.82 * Math.sqrt(value / max));
+  const intensity = (value: number) => (max === 0 ? 0 : 0.2 + 0.68 * Math.sqrt(value / max));
 
   const hovered = hover ? (hover.code ? byCode.get(hover.code) : undefined) : undefined;
 
@@ -234,7 +242,7 @@ export default function WorldMap({ counts, selected, hrefBase, pathname }: World
             })}
           </svg>
         ) : (
-          <div style={{ aspectRatio: view === "world" ? "960 / 470" : view === "europe" ? "960 / 620" : "960 / 760" }}>
+          <div style={{ aspectRatio: view === "world" ? "960 / 470" : view === "europe" ? "960 / 560" : "960 / 540" }}>
             <div className={styles.loading}>{failed ? "The map could not be loaded." : "Loading map…"}</div>
           </div>
         )}
@@ -281,14 +289,23 @@ export default function WorldMap({ counts, selected, hrefBase, pathname }: World
 
       <div className={styles.footer}>
         <span>
-          <strong>{n(counts.filter((c) => c.code !== UNKNOWN_COUNTRY && c[metric] > 0).length)}</strong> countries with {metric}
+          <strong>{n(withData)}</strong> {withData === 1 ? "country" : "countries"} with {metric}
+          {max > 0 && (
+            <>
+              {" · busiest "}
+              <strong>{busiest?.name}</strong> ({n(max)})
+            </>
+          )}
         </span>
         {unknown && unknown[metric] > 0 && (
-          <span className={styles.unknownChip} title="Rows recorded without a country — older data or requests with no location header. Not on the map; selectable in the country filter.">
+          <span
+            className={styles.unknownChip}
+            title="Rows recorded without a country — older data, or requests that carried no location. Not on the map; selectable in the country filter."
+          >
             <Icon name="info" size={11} /> {n(unknown[metric])} {metric} with no location
           </span>
         )}
-        <span>Location is the network the request came from — for pre-loaded images that is often a mail provider&rsquo;s server, not the reader.</span>
+        <span>Hover a country for its figures; click to filter.</span>
       </div>
     </div>
   );

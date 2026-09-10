@@ -299,6 +299,13 @@ export default function Timeline({ data, options, selectedId, range, hrefBase }:
             {hovered.isSend && data?.send && (
               <span className={styles.tooltipNote}>
                 <Icon name="send" size={11} /> {data.send.source === "config" ? "Send" : "Send detected"} — {data.send.text}
+                {data.send.source === "detected" && data.send.peakOpens !== null && (
+                  <>
+                    {" "}
+                    ({n(data.send.opensThatDay ?? 0)} opens that day against a busiest day of {n(data.send.peakOpens)})
+                  </>
+                )}
+                {!data.send.applied && " · shown for information; this email has no live-from, so everything counts as live"}
               </span>
             )}
             {hovered.burst !== null && (
@@ -311,8 +318,8 @@ export default function Timeline({ data, options, selectedId, range, hrefBase }:
                   </>
                 ) : (
                   <>
-                    Burst: {n(hovered.burst)} opens this day (threshold {data?.threshold}). A resend, a reminder, or a mail provider pre-fetching
-                    images.
+                    Burst: {n(hovered.burst)} opens this day — at least three times the days before it, against a falling trend. A resend, a
+                    reminder, or a mail provider pre-fetching images.
                   </>
                 )}
               </span>
@@ -329,10 +336,18 @@ export default function Timeline({ data, options, selectedId, range, hrefBase }:
 
       <div className={styles.footer}>
         {data?.send ? (
-          <span className={`${styles.sendChip} ${data.send.source === "detected" ? styles.sendChipDetected : ""}`}>
+          <span
+            className={`${styles.sendChip} ${data.send.source === "detected" ? styles.sendChipDetected : ""}`}
+            title={
+              data.send.applied
+                ? undefined
+                : "This email has no live-from recorded, so every event on it counts as live. The detected moment is shown for information only."
+            }
+          >
             <Icon name="send" size={11} />
             {data.send.source === "config" ? "Sent" : "Send detected"} {data.send.text}
             {data.send.opensThatDay !== null && ` · ${n(data.send.opensThatDay)} opens that day`}
+            {!data.send.applied && " · for information only"}
           </span>
         ) : (
           data && (
@@ -342,7 +357,7 @@ export default function Timeline({ data, options, selectedId, range, hrefBase }:
           )
         )}
         {data && data.preSendBursts.length > 0 && (
-          <span title="These days cleared the 50-open threshold but were dwarfed by the send that followed, so the send moment was moved later.">
+          <span title="These days cleared the 50-open floor but held less than a third of the busiest day, so the send was placed later. Most likely a seed list or a test to a small group.">
             <strong>{data.preSendBursts.length}</strong> earlier day{data.preSendBursts.length === 1 ? "" : "s"} passed over:{" "}
             {data.preSendBursts.map((b) => `${b.label} (${n(b.opens)} opens)`).join(", ")} — likely seed or test send
           </span>
@@ -495,8 +510,8 @@ function Chart({
 
   return (
     <svg className={styles.svg} viewBox={`0 0 ${width} ${HEIGHT}`} role="img" aria-label={`Opens and clicks by ${series.grain} for ${data.label}`}>
-      {/* Pre-send shading */}
-      {sendX !== null && sendX > MARGIN.left && (
+      {/* Pre-send shading — only when the moment actually gates the figures. */}
+      {sendX !== null && sendX > MARGIN.left && data.send?.applied && (
         <rect className={styles.presend} x={MARGIN.left} y={g.plotTop} width={sendX - MARGIN.left} height={g.plotHeight} />
       )}
 
