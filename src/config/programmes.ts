@@ -250,10 +250,11 @@ export const PROGRAMMES: Programme[] = [
         sendDate: null,
         notes:
           "Four CTAs: the header banner, Read more on each of the two symposia, " +
-          "and Learn more on the Booth 801 talks. Destinations not yet confirmed, " +
-          "so no link IDs are allowlisted — clicks return not-found rather than " +
-          "sending a reader to another brand's page. Build file index 3.html, " +
-          "prepared September 2026, job code GFM-UNB-3012.",
+          "and Learn more on the Booth 801 talks. All four are live and tracking, " +
+          "pointing provisionally at the congress site (hivglasgow.org) so the " +
+          "build can be tested — the confirmed Gilead landing page must replace " +
+          "it before send, which is a config change only and needs no rebuild. " +
+          "Build file index 3.html, prepared September 2026, job code GFM-UNB-3012.",
       },
     ],
   },

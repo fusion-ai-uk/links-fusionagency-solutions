@@ -22,6 +22,25 @@ const TOUCH_ID_COVID_WEBINAR =
   "https://touchinfectiousdiseases.com/covid-19/learning-zone/evolving-management-of-covid-19-in-hospitalised-patients-evidence-experience-and-practice/?video_id=liwhmie1y0";
 
 /**
+ * PROVISIONAL — HIV Glasgow pre-email, 28 September 2026.
+ *
+ * The official congress site (HIV Drug Therapy Glasgow, 8-11 November 2026),
+ * used so the four CTAs resolve and clicks are tracked while the email is in
+ * build and test. It is deliberately the congress itself, not another Gilead
+ * page: on-topic, non-promotional, and carrying no risk of sending a reader to
+ * a different brand's content.
+ *
+ * MUST BE REPLACED with the confirmed Gilead landing page before this wave is
+ * sent. The Gilead congress pattern used elsewhere here
+ * (hosted.bmj.com/gilead-<congress>) has no Glasgow page yet: gilead-aids2026
+ * answers 403, gilead-hivglasgow answers 404, so the page does not exist.
+ *
+ * Swapping it is a one-line change per ID and needs NO rebuild of the email:
+ * the link IDs are what is baked into the HTML, and they do not change.
+ */
+const HIV_GLASGOW_CONGRESS_PROVISIONAL = "https://www.hivglasgow.org";
+
+/**
  * Legacy fallback aliases, kept only for link IDs that may already be live in
  * mail sent before per-campaign maps existed.
  *
@@ -115,10 +134,18 @@ export const campaignLinkDestinations: Record<string, LinkDestinationMap> = {
   //   symposium-prevention-paradox — "Read more", The Prevention Paradox (Mon 9 Nov)
   //   booth-801-talks              — "Learn more", Booth 801 theatre programme
   // Those IDs are fixed and have gone to the email build, so they must not be
-  // renamed. The map stays empty until the destination URLs are confirmed: an
-  // unconfigured link ID returns 404, which is far safer than redirecting a
-  // recipient to another brand's content.
-  "imi-hivglasgow-pre-email-2026": {},
+  // renamed.
+  //
+  // All four point at the congress site for now — see the PROVISIONAL note on
+  // HIV_GLASGOW_CONGRESS_PROVISIONAL above. Separate IDs are kept even though
+  // the destination is currently shared, so the four placements report
+  // independently and the destinations can diverge later without a rebuild.
+  "imi-hivglasgow-pre-email-2026": {
+    "header-banner": HIV_GLASGOW_CONGRESS_PROVISIONAL,
+    "symposium-ageing-well": HIV_GLASGOW_CONGRESS_PROVISIONAL,
+    "symposium-prevention-paradox": HIV_GLASGOW_CONGRESS_PROVISIONAL,
+    "booth-801-talks": HIV_GLASGOW_CONGRESS_PROVISIONAL,
+  },
 };
 
 /**
