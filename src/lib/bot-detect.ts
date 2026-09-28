@@ -25,7 +25,15 @@ const PATTERNS: { reason: string; pattern: RegExp }[] = [
   // Generic crawler / bot signatures.
   { reason: "generic-bot", pattern: /bot\b/i },
   { reason: "crawler", pattern: /crawler|spider|slurp|scrapy/i },
-  { reason: "http-library", pattern: /curl\/|wget\/|python-requests|go-http-client|java\/|libwww|httpclient/i },
+  // Programmatic HTTP clients. These announce themselves, so the match is
+  // safe; the list grew after an AmBisome send logged 657 "clicks" from
+  // Python/3.11 aiohttp, which the earlier pattern (python-requests only) let
+  // straight through into the reported figures.
+  {
+    reason: "http-library",
+    pattern:
+      /curl\/|wget\/|python[-/]|aiohttp|go-http-client|java\/|libwww|httpclient|okhttp|node-fetch|axios\/|urllib|httpx\/|guzzle|restsharp|powershell|winhttp|\bgot\//i,
+  },
   { reason: "headless-browser", pattern: /headless|phantomjs|selenium|puppeteer|playwright/i },
   { reason: "search-engine", pattern: /googlebot|bingbot|yandex|baiduspider|applebot|petalbot|bytespider/i },
   { reason: "social-preview", pattern: /facebookexternalhit|linkedinbot|twitterbot/i },
