@@ -260,7 +260,7 @@ password, so no password is ever committed.
 | Email | Name | Role | Password variable |
 |-------|------|------|-------------------|
 | michael@fusionagency.solutions | Michael | `admin` | `ADMIN_PASSWORD` |
-| steven@fusionagency.solutions | Steven | `build` | `STEVEN_PASSWORD` |
+| steven@fusionagency.solutions | Steven | `admin` | `STEVEN_PASSWORD` |
 | mary@fusionagency.solutions | Mary | `build` | `MARY_PASSWORD` |
 
 ### What the roles can do

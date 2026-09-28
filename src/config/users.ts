@@ -42,10 +42,11 @@ export const USERS: AppUser[] = [
     passwordEnv: "ADMIN_PASSWORD",
   },
   {
-    // To give Steven the raw CSV export too, change this role to "admin".
+    // Administrator from 28 September 2026: Steven and Michael run the Gilead
+    // reporting together, so Steven needs the raw CSV export.
     email: "steven@fusionagency.solutions",
     name: "Steven",
-    role: "build",
+    role: "admin",
     passwordEnv: "STEVEN_PASSWORD",
   },
   {
