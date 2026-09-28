@@ -233,6 +233,31 @@ export const PROGRAMMES: Programme[] = [
     ],
   },
   {
+    id: "imi-hivglasgow",
+    label: "IMI — Gilead HIV Glasgow",
+    client: "IMI",
+    brand: "Gilead HIV Glasgow",
+    description:
+      "HIV Glasgow 2026. Gilead-sponsored symposia — Ageing well with HIV " +
+      "(Sunday 8 November) and The Prevention Paradox (Monday 9 November) — " +
+      "plus the Booth 801 theatre programme. Campaign-level only: no recipient " +
+      "IDs or merge tags are provided.",
+    campaigns: [
+      {
+        id: "imi-hivglasgow-pre-email-2026",
+        label: "HIV Glasgow Pre-email",
+        status: "in-review",
+        sendDate: null,
+        notes:
+          "Four CTAs: the header banner, Read more on each of the two symposia, " +
+          "and Learn more on the Booth 801 talks. Destinations not yet confirmed, " +
+          "so no link IDs are allowlisted — clicks return not-found rather than " +
+          "sending a reader to another brand's page. Build file index 3.html, " +
+          "prepared September 2026, job code GFM-UNB-3012.",
+      },
+    ],
+  },
+  {
     id: "imi-lyvdelzi",
     label: "IMI — Gilead Lyvdelzi",
     client: "IMI",

@@ -107,6 +107,18 @@ export const campaignLinkDestinations: Record<string, LinkDestinationMap> = {
 
   // Wave placeholder (fill when final HTML/links are ready)
   "imi-aids2026-wave-3": {},
+
+  // --- IMI / Gilead HIV Glasgow -------------------------------------------
+  // Four CTAs in the build (index 3.html, September 2026, GFM-UNB-3012):
+  //   header-banner                — hero image at the top, alt "let's talk"
+  //   symposium-ageing-well        — "Read more", Ageing well with HIV (Sun 8 Nov)
+  //   symposium-prevention-paradox — "Read more", The Prevention Paradox (Mon 9 Nov)
+  //   booth-801-talks              — "Learn more", Booth 801 theatre programme
+  // Those IDs are fixed and have gone to the email build, so they must not be
+  // renamed. The map stays empty until the destination URLs are confirmed: an
+  // unconfigured link ID returns 404, which is far safer than redirecting a
+  // recipient to another brand's content.
+  "imi-hivglasgow-pre-email-2026": {},
 };
 
 /**
