@@ -158,13 +158,26 @@ export const PROGRAMMES: Programme[] = [
     client: "IMI",
     brand: "Veklury",
     description:
-      "Five-email programme sent via IMI, set up with Steve and Bryony. " +
-      "Campaign-level only — no recipient IDs or merge tags. Email 1 is the " +
-      "COVID-19 webinar email (build file wave_4b).",
+      "Programme sent via IMI, set up with Steve and Bryony. Campaign-level " +
+      "only — no recipient IDs or merge tags. Wave 1 is the whitepaper email; " +
+      "the wave 4b webinar email is tracked separately under its own ID.",
     campaigns: [
       {
+        id: "gilead-veklury-wave-1-whitepaper",
+        label: "Veklury Wave 1 — Whitepaper",
+        status: "in-review",
+        sendDate: null,
+        notes:
+          "COVID-19 hasn't gone away. Two CTAs: WATCH NOW to the ESCMID 2025 " +
+          "symposium highlights, and a download of the Grayling COVID policy " +
+          "paper. Both destinations came from the build. Build file " +
+          "Wave_1_Whitepaper, job code GFM-VKY-0091, October 2026.",
+      },
+      {
         id: "gilead-veklury-email-1",
-        label: "Veklury Email 1 (wave 4b)",
+        // Kept under its original ID: the links are already built into that
+        // email, so renaming it would break them. The label carries the truth.
+        label: "Veklury Webinar Email (wave 4b)",
         status: "ready",
         sendDate: "September 2026",
         notes:

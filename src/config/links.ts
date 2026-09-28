@@ -20,6 +20,13 @@ const LANCET_MICROBE_FUNGAL_2024 =
   "https://www.thelancet.com/journals/lanmic/article/PIIS2666-5247(24)00039-9/fulltext";
 const TOUCH_ID_COVID_WEBINAR =
   "https://touchinfectiousdiseases.com/covid-19/learning-zone/evolving-management-of-covid-19-in-hospitalised-patients-evidence-experience-and-practice/?video_id=liwhmie1y0";
+// Same learning zone, a different video: the Gilead ESCMID 2025 symposium
+// highlights. Note the video_id — it is what distinguishes this from the
+// webinar used by the wave 4b email above.
+const TOUCH_ID_COVID_ESCMID_HIGHLIGHTS =
+  "https://touchinfectiousdiseases.com/covid-19/learning-zone/evolving-management-of-covid-19-in-hospitalised-patients-evidence-experience-and-practice/?video_id=wrnbt1y7iu";
+const GRAYLING_COVID_POLICY_PAPER =
+  "https://grayling.com/wp-content/uploads/2025/03/Covid-report-2_final_5.pdf";
 
 /**
  * PROVISIONAL — HIV Glasgow pre-email, 28 September 2026.
@@ -89,6 +96,15 @@ export const campaignLinkDestinations: Record<string, LinkDestinationMap> = {
     // Right-hand speaker headshot
     "speaker-right": TOUCH_ID_COVID_WEBINAR,
   },
+  // Wave 1, the whitepaper email (build file Wave_1_Whitepaper, GFM-VKY-0091,
+  // October 2026). Two CTAs, both destinations taken from the build itself.
+  "gilead-veklury-wave-1-whitepaper": {
+    // "WATCH NOW" — ESCMID 2025 symposium highlights, 4-min watch
+    "watch-now-symposium": TOUCH_ID_COVID_ESCMID_HIGHLIGHTS,
+    // "Click here to download the policy paper >" — Grayling COVID policy paper
+    "download-policy-paper": GRAYLING_COVID_POLICY_PAPER,
+  },
+
   "gilead-veklury-email-2": {},
   "gilead-veklury-email-3": {},
   "gilead-veklury-email-4": {},
