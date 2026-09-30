@@ -288,6 +288,53 @@ export const PROGRAMMES: Programme[] = [
       },
     ],
   },
+  {
+    id: "takeda-sleep-academy",
+    label: "Takeda Sleep Academy",
+    client: "IMI",
+    brand: "Takeda Sleep Academy",
+    description:
+      "Narcolepsy education programme for the Takeda Sleep Academy webinar " +
+      "series, sent via IMI. Three waves, each with the same three CTAs: two " +
+      "webinar registration buttons and a Join the Sleep Academy button. " +
+      "Campaign-level only — no recipient IDs or merge tags. Destinations are " +
+      "on cloud.takeda-uk.com and carry Takeda's own Matomo campaign " +
+      "parameters, which differ per wave and must be preserved exactly.",
+    campaigns: [
+      {
+        id: "takeda-sleep-academy-wave-1",
+        label: "Sleep Academy Wave 1 — Webinar programme",
+        status: "ready",
+        sendDate: null,
+        notes:
+          "Subject theme: the webinar programme. CTAs: two REGISTER FOR THE " +
+          "EXPERT-LED WEBINARS buttons and JOIN THE SLEEP ACADEMY. Build file " +
+          "Sleep Academy Wave 1 v2.html. Note the Outlook-only VML button on " +
+          "the Join CTA points at the webinar page with no Matomo parameters " +
+          "— flagged to the build team.",
+      },
+      {
+        id: "takeda-sleep-academy-wave-2",
+        label: "Sleep Academy Wave 2 — The Excessively Sleepy Patient",
+        status: "ready",
+        sendDate: null,
+        notes:
+          "CTAs: REGISTER FOR THE FREE WEBINAR, REGISTER HERE, and JOIN THE " +
+          "SLEEP ACADEMY. Build file Sleep_Academy_Wave_2 v2.html.",
+      },
+      {
+        id: "takeda-sleep-academy-wave-3",
+        label: "Sleep Academy Wave 3 — Excessive daytime sleepiness",
+        status: "ready",
+        sendDate: null,
+        notes:
+          "CTAs: two SECURE YOUR PLACE HERE buttons and JOIN THE SLEEP " +
+          "ACADEMY. Build file Sleep_Academy_Wave_3 v2.html. The Join CTA's " +
+          "mtm_source is empty in the build where waves 1 and 2 send " +
+          "'thirdparty'; preserved as built and flagged to the build team.",
+      },
+    ],
+  },
 ];
 
 /** True when the ID is a `-test` twin rather than a live send. */

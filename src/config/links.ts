@@ -46,6 +46,32 @@ const GRAYLING_COVID_POLICY_PAPER =
 const BMJ_GILEAD_GLASGOW_2026 = "https://hosted.bmj.com/gilead-glasgow2026";
 
 /**
+ * Takeda Sleep Academy. Two distinct destinations — note the different casing
+ * and separators, which is exactly the sort of thing that gets mistyped:
+ */
+const TAKEDA_WEBINAR_REG = "https://cloud.takeda-uk.com/Sleep_Academy_Webinar_Registration";
+const TAKEDA_ACADEMY_REG = "https://cloud.takeda-uk.com/sleep-academy-registration";
+
+/**
+ * Takeda's Matomo campaign parameters, in the order and spelling the builds
+ * use. `mtm_content` is empty in every build and `mtm_group` is empty on the
+ * Join CTA; both are kept rather than dropped so the query string matches
+ * what Takeda expect to receive.
+ */
+function takedaParams(placement: string, group: string, source = "thirdparty"): string {
+  return [
+    `mtm_source=${source}`,
+    "mtm_medium=email",
+    "mtm_campaign=Narcolepsy_GB_Education_Webinar_042026",
+    "mtm_kwd=Other",
+    "mtm_cid=a1Ubi000002OOMbEAO",
+    "mtm_content=",
+    `mtm_placement=${placement}`,
+    `mtm_group=${group}`,
+  ].join("&");
+}
+
+/**
  * Legacy fallback aliases, kept only for link IDs that may already be live in
  * mail sent before per-campaign maps existed.
  *
@@ -140,6 +166,43 @@ export const campaignLinkDestinations: Record<string, LinkDestinationMap> = {
 
   // Wave placeholder (fill when final HTML/links are ready)
   "imi-aids2026-wave-3": {},
+
+  // --- Takeda Sleep Academy (via IMI) -------------------------------------
+  // Three waves, three CTAs each, all on cloud.takeda-uk.com. Two pages are
+  // involved and they are easy to confuse:
+  //   /Sleep_Academy_Webinar_Registration  — the webinar sign-up
+  //   /sleep-academy-registration          — joining the Academy itself
+  //
+  // Every destination carries Takeda's Matomo campaign parameters. They are
+  // reproduced verbatim from each build, including the empty mtm_content and
+  // mtm_group: these feed Takeda's own attribution, mtm_placement identifies
+  // the wave, and changing or dropping one would break their reporting.
+  "takeda-sleep-academy-wave-1": {
+    // "REGISTER FOR THE EXPERT-LED WEBINARS →", upper button
+    "register-webinar-1": `${TAKEDA_WEBINAR_REG}?${takedaParams("Wave1", "All")}`,
+    // the same CTA repeated lower down the email
+    "register-webinar-2": `${TAKEDA_WEBINAR_REG}?${takedaParams("Wave1", "All")}`,
+    // "JOIN THE SLEEP ACADEMY →"
+    "join-sleep-academy": `${TAKEDA_ACADEMY_REG}?${takedaParams("Wave1", "")}`,
+  },
+  "takeda-sleep-academy-wave-2": {
+    // "REGISTER FOR THE FREE WEBINAR →"
+    "register-webinar-1": `${TAKEDA_WEBINAR_REG}?${takedaParams("Wave2", "All")}`,
+    // "REGISTER HERE →"
+    "register-webinar-2": `${TAKEDA_WEBINAR_REG}?${takedaParams("Wave2", "All")}`,
+    // "JOIN THE SLEEP ACADEMY →"
+    "join-sleep-academy": `${TAKEDA_ACADEMY_REG}?${takedaParams("Wave2", "")}`,
+  },
+  "takeda-sleep-academy-wave-3": {
+    // "SECURE YOUR PLACE HERE →", upper button
+    "register-webinar-1": `${TAKEDA_WEBINAR_REG}?${takedaParams("Wave3", "All")}`,
+    // the same CTA repeated lower down the email
+    "register-webinar-2": `${TAKEDA_WEBINAR_REG}?${takedaParams("Wave3", "All")}`,
+    // "JOIN THE SLEEP ACADEMY →". mtm_source is empty in the wave 3 build
+    // where waves 1 and 2 send "thirdparty". Reproduced as built rather than
+    // silently corrected — it is Takeda's attribution to decide on.
+    "join-sleep-academy": `${TAKEDA_ACADEMY_REG}?${takedaParams("Wave3", "", "")}`,
+  },
 
   // --- IMI / Gilead HIV Glasgow -------------------------------------------
   // Four CTAs in the build (index 3.html, September 2026, GFM-UNB-3012):
