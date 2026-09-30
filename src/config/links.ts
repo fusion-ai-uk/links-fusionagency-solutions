@@ -29,23 +29,21 @@ const GRAYLING_COVID_POLICY_PAPER =
   "https://grayling.com/wp-content/uploads/2025/03/Covid-report-2_final_5.pdf";
 
 /**
- * PROVISIONAL — HIV Glasgow pre-email, 28 September 2026.
+ * HIV Glasgow pre-email destination, confirmed by Steve on 30 September 2026.
+ * It replaces the congress site (hivglasgow.org) that stood in while the
+ * destination was unknown.
  *
- * The official congress site (HIV Drug Therapy Glasgow, 8-11 November 2026),
- * used so the four CTAs resolve and clicks are tracked while the email is in
- * build and test. It is deliberately the congress itself, not another Gilead
- * page: on-topic, non-promotional, and carrying no risk of sending a reader to
- * a different brand's content.
+ * Note the slug: glasgow2026, not hivglasgow — which is why searching for the
+ * latter found nothing.
  *
- * MUST BE REPLACED with the confirmed Gilead landing page before this wave is
- * sent. The Gilead congress pattern used elsewhere here
- * (hosted.bmj.com/gilead-<congress>) has no Glasgow page yet: gilead-aids2026
- * answers 403, gilead-hivglasgow answers 404, so the page does not exist.
- *
- * Swapping it is a one-line change per ID and needs NO rebuild of the email:
- * the link IDs are what is baked into the HTML, and they do not change.
+ * NOT YET PUBLISHED. As of 30 September 2026 this URL answers 404 while
+ * hosted.bmj.com itself answers 200 and gilead-aids2026 answers 403 (exists,
+ * blocks robots). BMJ have evidently not put the Glasgow page up yet, which is
+ * unremarkable for a congress on 8-11 November. It must be live before this
+ * email sends, or every click lands on a BMJ 404 — worth re-checking as part
+ * of the pre-send tests.
  */
-const HIV_GLASGOW_CONGRESS_PROVISIONAL = "https://www.hivglasgow.org";
+const BMJ_GILEAD_GLASGOW_2026 = "https://hosted.bmj.com/gilead-glasgow2026";
 
 /**
  * Legacy fallback aliases, kept only for link IDs that may already be live in
@@ -152,15 +150,14 @@ export const campaignLinkDestinations: Record<string, LinkDestinationMap> = {
   // Those IDs are fixed and have gone to the email build, so they must not be
   // renamed.
   //
-  // All four point at the congress site for now — see the PROVISIONAL note on
-  // HIV_GLASGOW_CONGRESS_PROVISIONAL above. Separate IDs are kept even though
-  // the destination is currently shared, so the four placements report
-  // independently and the destinations can diverge later without a rebuild.
+  // All four go to the Gilead Glasgow 2026 hub. Separate IDs are kept even
+  // though the destination is shared, so the four placements report
+  // independently and can diverge later without rebuilding the email.
   "imi-hivglasgow-pre-email-2026": {
-    "header-banner": HIV_GLASGOW_CONGRESS_PROVISIONAL,
-    "symposium-ageing-well": HIV_GLASGOW_CONGRESS_PROVISIONAL,
-    "symposium-prevention-paradox": HIV_GLASGOW_CONGRESS_PROVISIONAL,
-    "booth-801-talks": HIV_GLASGOW_CONGRESS_PROVISIONAL,
+    "header-banner": BMJ_GILEAD_GLASGOW_2026,
+    "symposium-ageing-well": BMJ_GILEAD_GLASGOW_2026,
+    "symposium-prevention-paradox": BMJ_GILEAD_GLASGOW_2026,
+    "booth-801-talks": BMJ_GILEAD_GLASGOW_2026,
   },
 };
 
