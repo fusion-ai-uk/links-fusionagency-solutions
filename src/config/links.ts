@@ -125,6 +125,11 @@ export const campaignLinkDestinations: Record<string, LinkDestinationMap> = {
   "gilead-veklury-wave-1-whitepaper": {
     // "WATCH NOW" — ESCMID 2025 symposium highlights, 4-min watch
     "watch-now-symposium": TOUCH_ID_COVID_ESCMID_HIGHLIGHTS,
+    // The video still itself, linked as well as the button (added 1 October
+    // 2026 at Steve's request). Same destination as the button deliberately
+    // given its own ID: sharing one would merge the two placements and we
+    // could no longer tell whether the image or the button earned the click.
+    "symposium-video-image": TOUCH_ID_COVID_ESCMID_HIGHLIGHTS,
     // "Click here to download the policy paper >" — Grayling COVID policy paper
     "download-policy-paper": GRAYLING_COVID_POLICY_PAPER,
   },

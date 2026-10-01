@@ -168,9 +168,12 @@ export const PROGRAMMES: Programme[] = [
         status: "in-review",
         sendDate: null,
         notes:
-          "COVID-19 hasn't gone away. Two CTAs: WATCH NOW to the ESCMID 2025 " +
-          "symposium highlights, and a download of the Grayling COVID policy " +
-          "paper. Both destinations came from the build. Build file " +
+          "COVID-19 hasn't gone away. Three CTAs across two destinations: the " +
+          "WATCH NOW button and the video still itself both go to the ESCMID " +
+          "2025 symposium highlights, and a download of the Grayling COVID " +
+          "policy paper. The image link was added on 1 October 2026 at Steve's " +
+          "request and keeps its own link ID so the two placements report " +
+          "separately. Destinations came from the build. Build file " +
           "Wave_1_Whitepaper, job code GFM-VKY-0091, October 2026.",
       },
       {
