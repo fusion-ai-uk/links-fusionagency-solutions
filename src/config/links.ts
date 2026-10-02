@@ -60,6 +60,22 @@ const GRAYLING_COVID_POLICY_PAPER =
 const BMJ_GILEAD_GLASGOW_2026 = "https://hosted.bmj.com/gilead-glasgow2026";
 
 /**
+ * Act Now on PBC (via Inizio). Stored over https: the build uses http:// on
+ * some links and hosted.bmj.com 301s those to https anyway, so this drops a
+ * needless hop and the mixed-scheme warning some clients show.
+ */
+const PBC_ACT_NOW_INSIGHTS = "https://hosted.bmj.com/act-now-on-pbc#latestinsights";
+const PBC_PPAR_ROLE =
+  "https://hosted.bmj.com/act-now-on-pbc/new-ppar-possibilities#roleofpparsinpbc";
+/**
+ * The other candidate for the "Visit website" button — see the note on that
+ * campaign below. Declared so the swap is a one-word change if confirmed.
+ */
+const PBC_SECOND_LINE_GOALS =
+  "https://hosted.bmj.com/act-now-on-pbc/second-line-escalation#treatmentgoals";
+void PBC_SECOND_LINE_GOALS;
+
+/**
  * Takeda Sleep Academy. Two distinct destinations — note the different casing
  * and separators, which is exactly the sort of thing that gets mistyped:
  */
@@ -194,6 +210,28 @@ export const campaignLinkDestinations: Record<string, LinkDestinationMap> = {
 
   // Wave placeholder (fill when final HTML/links are ready)
   "imi-aids2026-wave-3": {},
+
+  // --- Act Now on PBC (via Inizio) ----------------------------------------
+  // Email 3, the website build phase 3 (build file index.html, GFM-UNB-2857).
+  // Three visible buttons, but TWELVE hrefs: every button is built twice, an
+  // Outlook <v:rect> and an ordinary <a>, and each of those carries the label
+  // and the arrow as separate links. All four hrefs behind a button must get
+  // that button's URL, or Outlook readers slip past tracking entirely.
+  //
+  // "Visit website" is an ASSUMED destination. The build disagrees with
+  // itself: two of its four hrefs go to the site's latest-insights anchor and
+  // two to second-line-escalation#treatmentgoals, evenly split. The label and
+  // the surrounding copy ("insights and evidence") point to the former, so
+  // that is what is set here, flagged for confirmation. If it should be the
+  // escalation page, swap in PBC_SECOND_LINE_GOALS — no rebuild needed.
+  "pbc-act-now-email-3": {
+    // "Visit website" — ASSUMED, awaiting confirmation
+    "visit-website": PBC_ACT_NOW_INSIGHTS,
+    // "Watch video" — Professor Calvaruso on treatment escalation
+    "watch-video-calvaruso": PBC_PPAR_ROLE,
+    // "Watch PPAR video" — therapeutic potential of PPARs
+    "watch-ppar-video": PBC_PPAR_ROLE,
+  },
 
   // --- Takeda Sleep Academy (via IMI) -------------------------------------
   // Three waves, three CTAs each, all on cloud.takeda-uk.com. Two pages are

@@ -300,6 +300,36 @@ export const PROGRAMMES: Programme[] = [
     ],
   },
   {
+    id: "pbc-act-now",
+    label: "Act Now on PBC",
+    client: "Inizio",
+    brand: "Act Now on PBC",
+    description:
+      "Primary biliary cholangitis disease-awareness programme, built by " +
+      "Inizio and hosted on hosted.bmj.com/act-now-on-pbc. Campaign-level " +
+      "only — no recipient IDs or merge tags. Note the builds wrap every " +
+      "button twice, an Outlook VML version and an ordinary one, so each " +
+      "button has four hrefs to swap rather than one.",
+    campaigns: [
+      {
+        id: "pbc-act-now-email-3",
+        label: "Act Now on PBC Email 3 (website build phase 3)",
+        status: "ready",
+        sendDate: null,
+        notes:
+          "Hear from a PBC expert. Three buttons: Visit website, Watch video " +
+          "(Professor Calvaruso) and Watch PPAR video. Timed to coincide with " +
+          "a launch. Build file index.html in Build 1.zip, job code " +
+          "GFM-UNB-2857. Two open queries raised with the build team: the " +
+          "Visit website button's four hrefs are split evenly between two " +
+          "different destinations, so its target is assumed from the copy; " +
+          "and the Outlook version of Watch PPAR video points at an " +
+          "unreplaced #anchorname placeholder. Emails 1 and 2 of this " +
+          "programme are not on the platform.",
+      },
+    ],
+  },
+  {
     id: "takeda-sleep-academy",
     label: "Takeda Sleep Academy",
     client: "IMI",
