@@ -16,6 +16,20 @@ const BMJ_LYVDELZI_BIOCHEMICAL =
 const BMJ_AIDS_2026 = "https://hosted.bmj.com/gilead-aids2026";
 const TOUCH_ID_FUNGI_NOW_EP1 =
   "https://touchinfectiousdiseases.com/sepsis/learning-zone/fungi-now-timely-insights-for-sharper-clinical-decision-making/?video_id=5e7qd9ryrs";
+/**
+ * Fungi Now Episode 2, as built (Fungi Now Wave 2.html, GFM-UNB-2860).
+ *
+ * QUERY RAISED 2 October 2026: the video_id is identical to Episode 1's. On
+ * this learning zone the video_id is the only thing distinguishing one film
+ * from another on a shared page, so as built the Episode 2 buttons may open
+ * Episode 1. Kept exactly as the build has it rather than guessed at — if a
+ * different ID comes back, change it here and no rebuild is needed.
+ */
+const TOUCH_ID_FUNGI_NOW_EP2 =
+  "https://touchinfectiousdiseases.com/sepsis/learning-zone/fungi-now-timely-insights-for-sharper-clinical-decision-making/?video_id=5e7qd9ryrs";
+/** Lancet Infectious Diseases — ECMM guideline for invasive candidiasis. */
+const LANCET_ID_CANDIDIASIS_2024 =
+  "https://www.thelancet.com/journals/laninf/article/PIIS1473-3099(24)00749-7/fulltext";
 const LANCET_MICROBE_FUNGAL_2024 =
   "https://www.thelancet.com/journals/lanmic/article/PIIS2666-5247(24)00039-9/fulltext";
 const TOUCH_ID_COVID_WEBINAR =
@@ -104,7 +118,16 @@ export const campaignLinkDestinations: Record<string, LinkDestinationMap> = {
     // "Read the full publication here" — Lancet Microbe 2024
     "read-publication": LANCET_MICROBE_FUNGAL_2024,
   },
-  "gilead-ambisome-email-2": {},
+  // Email 2 (build file "Fungi Now Wave 2", GFM-UNB-2860): three CTAs, two
+  // destinations — the same shape as email 1.
+  "gilead-ambisome-email-2": {
+    // Episode 2 play-button image
+    "episode-2-thumbnail": TOUCH_ID_FUNGI_NOW_EP2,
+    // "Watch Episode 2 >" text button
+    "watch-episode-2": TOUCH_ID_FUNGI_NOW_EP2,
+    // "Read the full publication here →" — ECMM invasive candidiasis guideline
+    "read-publication": LANCET_ID_CANDIDIASIS_2024,
+  },
   "gilead-ambisome-email-3": {},
   "gilead-ambisome-email-4": {},
   "gilead-ambisome-email-5": {},

@@ -124,10 +124,18 @@ export const PROGRAMMES: Programme[] = [
       },
       {
         id: "gilead-ambisome-email-2",
-        label: "AmBisome Email 2",
-        status: "planned",
+        label: "AmBisome Email 2 (Fungi Now wave 2)",
+        status: "ready",
         sendDate: null,
-        notes: "Awaiting approved HTML and destination URLs.",
+        notes:
+          "Stepwise guide: ECMM guideline for the management of invasive " +
+          "candidiasis. Three CTAs across two destinations: the Episode 2 " +
+          "thumbnail and the Watch Episode 2 button both go to the Fungi Now " +
+          "learning zone, and Read the full publication goes to the ECMM " +
+          "guideline in Lancet Infectious Diseases. Build file Fungi Now " +
+          "Wave 2.html, job code GFM-UNB-2860. Open query: the Episode 2 " +
+          "video_id is identical to Episode 1's, so the buttons may open the " +
+          "wrong film — raised with the build team, set as built meanwhile.",
       },
       {
         id: "gilead-ambisome-email-3",
