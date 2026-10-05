@@ -77,18 +77,13 @@ export async function GET(request: NextRequest, context: RouteContext) {
   // Immediate redirect for valid link IDs — never show a tracking page.
   const response = NextResponse.redirect(destinationUrl, 302);
 
-  // A click redirect must never be cached. The framework default here is
-  // "public, max-age=0, must-revalidate", which lets a shared cache — a CDN,
-  // a hospital proxy — store the response. Even with revalidation, a cache
-  // that answers on our behalf means a click we never see, and on a media
-  // placement the click is the only measure we hold. It would also let a
-  // stale destination survive a config change, which is precisely the thing
-  // we promise partners they do not need a rebuild for.
-  //
-  // The open pixel already sets these; the redirect should match it.
-  response.headers.set("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
-  response.headers.set("Pragma", "no-cache");
-  response.headers.set("Expires", "0");
+  // The framework default here is "public, max-age=0, must-revalidate",
+  // which lets a shared cache store the response — and a stale destination
+  // must never outlive a config change, the thing we tell partners needs no
+  // rebuild.
+  for (const [key, value] of Object.entries(NO_STORE)) {
+    response.headers.set(key, value);
+  }
 
   return response;
 }
