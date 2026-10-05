@@ -5,6 +5,18 @@ import { withForwardedParams } from "@/lib/forward-params";
 
 export const runtime = "nodejs";
 
+/**
+ * Nothing on this path may be cached. A shared cache answering on our behalf
+ * is a click we never record, and on a media placement the click is the only
+ * measure we hold — there is no pixel to fall back on. The same headers the
+ * open pixel already sets.
+ */
+const NO_STORE = {
+  "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+  Pragma: "no-cache",
+  Expires: "0",
+} as const;
+
 type RouteContext = {
   params: Promise<{ linkId: string }>;
 };
@@ -36,9 +48,13 @@ export async function GET(request: NextRequest, context: RouteContext) {
   // Unknown link ID — never redirect to a user-supplied URL.
   if (!destinationUrl) {
     console.warn(`[click] unknown link ID "${linkId}" — returning 404`);
+    // Uncacheable too. A link is often unconfigured only because its
+    // destination has not been confirmed yet — the HIV Glasgow CTAs sat at
+    // 404 for two days before the URL came back. A cached 404 would outlive
+    // the fix and keep showing an error to readers after the link works.
     return NextResponse.json(
       { error: "Unknown or unconfigured link ID" },
-      { status: 404 }
+      { status: 404, headers: NO_STORE }
     );
   }
 
