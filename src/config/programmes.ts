@@ -189,10 +189,19 @@ export const PROGRAMMES: Programme[] = [
         // Kept under its original ID: the links are already built into that
         // email, so renaming it would break them. The label carries the truth.
         label: "Veklury Webinar Email (wave 4b)",
-        status: "ready",
-        sendDate: "September 2026",
+        status: "sent",
+        sendDate: "24 September 2026",
+        // Bryony gave the transmission date but not the hour, so this is the
+        // start of that UK day. Anything the build team clicked on the 23rd or
+        // earlier stays out; a check on the morning of the 24th would count.
+        liveFrom: "2026-09-24T00:00:00+01:00",
         notes:
-          "COVID-19 in clinical practice webinar. Three image CTAs to the same touchinfectiousdiseases.com page.",
+          "COVID-19 in clinical practice webinar, the last of the 2025 emails. " +
+          "Three image CTAs to the same touchinfectiousdiseases.com page. " +
+          "Transmitted 24 September 2026 with a resend to non-openers on 1 " +
+          "October, to 70,393 contacts — Infectious Diseases, Internal " +
+          "Medicine, Emergency Medicine and Pulmonology across the EEA " +
+          "excluding France and including Israel.",
       },
       {
         id: "gilead-veklury-email-2",
