@@ -32,11 +32,31 @@ export const CAMPAIGN_STATUS_LABELS: Record<CampaignStatus, string> = {
   closed: "Closed",
 };
 
+/**
+ * How the links reached the reader.
+ *
+ *   email — a third-party mass email, the original case. There is an open
+ *           pixel, so opens and therefore open rate and CTOR all mean
+ *           something.
+ *   media — a paid placement such as a TrendMD native text ad. There is no
+ *           pixel and no audience of our own: impressions belong to the
+ *           publisher, so clicks are the only measure we hold, and any rate
+ *           needs their denominator.
+ *
+ * Same mechanism either way — one platform, one set of rules — but the two
+ * must not be added together in a report without saying so.
+ */
+export type CampaignChannel = "email" | "media";
+
 export interface CampaignDefinition {
   /** The `cid` used in /o and /c tracking URLs. */
   id: string;
   label: string;
   status: CampaignStatus;
+  /** Defaults to "email" when unset, which every historic campaign is. */
+  channel?: CampaignChannel;
+  /** Media only: who serves the placement, e.g. "TrendMD via Digital Peloton". */
+  publisher?: string;
   /** Planned transmission date, DD Month YYYY. null while TBC. */
   sendDate: string | null;
   /**
@@ -336,6 +356,23 @@ export const PROGRAMMES: Programme[] = [
           "unreplaced #anchorname placeholder. Emails 1 and 2 of this " +
           "programme are not on the platform.",
       },
+      {
+        id: "pbc-act-now-trendmd-1",
+        label: "Act Now on PBC — TrendMD native ad",
+        status: "in-review",
+        channel: "media",
+        publisher: "TrendMD via Digital Peloton",
+        sendDate: null,
+        notes:
+          "Trial of click tracking on a TrendMD native text ad, proposed by " +
+          "Laura as the place to prove the mechanism rather than retrofitting " +
+          "it to a live campaign. Two link IDs because a native ad allows two " +
+          "clickable links, one in the headline and one in the byline. No open " +
+          "pixel exists on a media placement, so clicks are the only measure " +
+          "we hold and impressions must come from TrendMD. Still to confirm " +
+          "with Digital Peloton: whether TrendMD append anything to the href " +
+          "at serve or click time.",
+      },
     ],
   },
   {
@@ -406,6 +443,23 @@ export function getTestCampaignId(campaignId: string): string {
 /** All campaigns across every programme, in registry order. */
 export function getAllCampaigns(): CampaignDefinition[] {
   return PROGRAMMES.flatMap((programme) => programme.campaigns);
+}
+
+/**
+ * A campaign's channel. Unset means email: every campaign predating media
+ * tracking was an email, so the default keeps history correct.
+ */
+export function getCampaignChannel(campaignId: string): CampaignChannel {
+  return getCampaignDefinition(campaignId)?.channel ?? "email";
+}
+
+/**
+ * True when opens are a meaningful measure for this campaign. A media
+ * placement has no pixel, so open rate and CTOR cannot be computed and must
+ * not be shown as zero — they are absent, which is a different thing.
+ */
+export function hasOpenTracking(campaignId: string): boolean {
+  return getCampaignChannel(campaignId) === "email";
 }
 
 export function getProgrammeById(programmeId: string): Programme | null {

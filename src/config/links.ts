@@ -233,6 +233,19 @@ export const campaignLinkDestinations: Record<string, LinkDestinationMap> = {
     "watch-ppar-video": PBC_PPAR_ROLE,
   },
 
+  // --- Act Now on PBC, TrendMD native ads (via Digital Peloton) -----------
+  // A native text ad allows two clickable links, one in the headline and one
+  // in the byline, so each gets its own ID and the two report separately.
+  //
+  // Unlike an email link, these may arrive with the ad server's own campaign
+  // parameters appended at click time. The redirect now carries recognised
+  // ones through to the destination (src/lib/forward-params.ts); the stored
+  // URL still decides where the reader lands.
+  "pbc-act-now-trendmd-1": {
+    "native-headline": PBC_ACT_NOW_INSIGHTS,
+    "native-byline": PBC_ACT_NOW_INSIGHTS,
+  },
+
   // --- Takeda Sleep Academy (via IMI) -------------------------------------
   // Three waves, three CTAs each, all on cloud.takeda-uk.com. Two pages are
   // involved and they are easy to confuse:

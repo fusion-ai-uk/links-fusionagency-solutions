@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDestinationUrl } from "@/config/links";
 import { logEmailEvent, parseTrackingParams } from "@/lib/tracking";
+import { withForwardedParams } from "@/lib/forward-params";
 
 export const runtime = "nodejs";
 
@@ -18,7 +19,15 @@ type RouteContext = {
 export async function GET(request: NextRequest, context: RouteContext) {
   const { linkId } = await context.params;
   const params = parseTrackingParams(request.nextUrl.searchParams);
-  const destinationUrl = getDestinationUrl(linkId, params.campaignId);
+  const configuredUrl = getDestinationUrl(linkId, params.campaignId);
+
+  // Media placements arrive with the ad server's own campaign parameters on
+  // the query string. Carry the recognised ones through to the destination,
+  // which an email link never needs and a text ad depends on. The configured
+  // URL still decides where the reader goes; this only adds to its query.
+  const destinationUrl = configuredUrl
+    ? withForwardedParams(configuredUrl, request.nextUrl.searchParams)
+    : null;
 
   console.log(
     `[click] linkId=${linkId} cid=${params.campaignId} destination=${destinationUrl ?? "NONE"}`
