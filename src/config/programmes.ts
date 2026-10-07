@@ -349,11 +349,13 @@ export const PROGRAMMES: Programme[] = [
           "Hear from a PBC expert. Three buttons: Visit website, Watch video " +
           "(Professor Calvaruso) and Watch PPAR video. Timed to coincide with " +
           "a launch. Build file index.html in Build 1.zip, job code " +
-          "GFM-UNB-2857. Two open queries raised with the build team: the " +
-          "Visit website button's four hrefs are split evenly between two " +
-          "different destinations, so its target is assumed from the copy; " +
-          "and the Outlook version of Watch PPAR video points at an " +
-          "unreplaced #anchorname placeholder. Emails 1 and 2 of this " +
+          "GFM-UNB-2857. All three destinations confirmed by Steve on 7 " +
+          "October 2026. The build had them shifted by one button: Watch " +
+          "video carried the PPAR page and the escalation page it should " +
+          "have carried appeared instead behind Visit website. Corrected in " +
+          "config; the HTML still needs its hrefs swapped for the tracked " +
+          "ones. Still open: the Outlook version of Watch PPAR video points " +
+          "at an unreplaced #anchorname placeholder. Emails 1 and 2 of this " +
           "programme are not on the platform.",
       },
       {

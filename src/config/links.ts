@@ -68,12 +68,11 @@ const PBC_ACT_NOW_INSIGHTS = "https://hosted.bmj.com/act-now-on-pbc#latestinsigh
 const PBC_PPAR_ROLE =
   "https://hosted.bmj.com/act-now-on-pbc/new-ppar-possibilities#roleofpparsinpbc";
 /**
- * The other candidate for the "Visit website" button — see the note on that
- * campaign below. Declared so the swap is a one-word change if confirmed.
+ * Treatment goals on the second-line escalation page. Confirmed by Steve on
+ * 7 October 2026 as the destination for the Watch video button.
  */
 const PBC_SECOND_LINE_GOALS =
   "https://hosted.bmj.com/act-now-on-pbc/second-line-escalation#treatmentgoals";
-void PBC_SECOND_LINE_GOALS;
 
 /**
  * Takeda Sleep Academy. Two distinct destinations — note the different casing
@@ -218,17 +217,21 @@ export const campaignLinkDestinations: Record<string, LinkDestinationMap> = {
   // and the arrow as separate links. All four hrefs behind a button must get
   // that button's URL, or Outlook readers slip past tracking entirely.
   //
-  // "Visit website" is an ASSUMED destination. The build disagrees with
-  // itself: two of its four hrefs go to the site's latest-insights anchor and
-  // two to second-line-escalation#treatmentgoals, evenly split. The label and
-  // the surrounding copy ("insights and evidence") point to the former, so
-  // that is what is set here, flagged for confirmation. If it should be the
-  // escalation page, swap in PBC_SECOND_LINE_GOALS — no rebuild needed.
+  // All three destinations confirmed by Steve on 7 October 2026, which
+  // resolved an inconsistency in the build worth recording.
+  //
+  // The build had the URLs shifted by one button. Watch video carried the
+  // PPAR page (which belongs to Watch PPAR video), and the escalation page
+  // it should have carried turned up instead on two of the four hrefs behind
+  // Visit website. That stray URL was flagged at the time as "Visit website
+  // disagrees with itself" — but the two halves of the problem were treated
+  // as separate, and Watch video was configured as built because all four of
+  // its hrefs agreed with each other. Agreeing is not the same as correct.
   "pbc-act-now-email-3": {
-    // "Visit website" — ASSUMED, awaiting confirmation
+    // "Visit website" — the site's latest insights
     "visit-website": PBC_ACT_NOW_INSIGHTS,
     // "Watch video" — Professor Calvaruso on treatment escalation
-    "watch-video-calvaruso": PBC_PPAR_ROLE,
+    "watch-video-calvaruso": PBC_SECOND_LINE_GOALS,
     // "Watch PPAR video" — therapeutic potential of PPARs
     "watch-ppar-video": PBC_PPAR_ROLE,
   },
