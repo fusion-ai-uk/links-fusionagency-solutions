@@ -402,14 +402,19 @@ export const PROGRAMMES: Programme[] = [
       {
         id: "takeda-sleep-academy-wave-1",
         label: "Sleep Academy Wave 1 — Webinar programme",
-        status: "ready",
-        sendDate: null,
+        status: "sent",
+        sendDate: "7 October 2026",
+        // Hour not recorded, so this is the start of that UK day. Build-team
+        // checks on the 6th or earlier stay out; a check on the morning of
+        // the 7th counts. Tighten if the transmission time comes through.
+        liveFrom: "2026-10-07T00:00:00+01:00",
         notes:
           "Subject theme: the webinar programme. CTAs: two REGISTER FOR THE " +
           "EXPERT-LED WEBINARS buttons and JOIN THE SLEEP ACADEMY. Build file " +
-          "Sleep Academy Wave 1 v2.html. Note the Outlook-only VML button on " +
-          "the Join CTA points at the webinar page with no Matomo parameters " +
-          "— flagged to the build team.",
+          "Sleep Academy Wave 1 v2.html. Sent 7 October 2026 to 13,728 UK " +
+          "contacts across nine specialisms. Note the Outlook-only VML button " +
+          "on the Join CTA points at the webinar page with no Matomo " +
+          "parameters — flagged to the build team.",
       },
       {
         id: "takeda-sleep-academy-wave-2",
