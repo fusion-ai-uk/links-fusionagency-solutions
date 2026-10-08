@@ -221,7 +221,18 @@ export const PROGRAMMES: Programme[] = [
           "Transmitted 24 September 2026 with a resend to non-openers on 1 " +
           "October, to 70,393 contacts — Infectious Diseases, Internal " +
           "Medicine, Emergency Medicine and Pulmonology across the EEA " +
-          "excluding France and including Israel.",
+          "excluding France and including Israel.
+
+" +
+          "NO TRACKING DATA EXISTS FOR THIS SEND. The export shows zero " +
+          "events between 20 September and 3 October, a window covering both " +
+          "the transmission and the resend. Not one open from 70,393 " +
+          "contacts: an open pixel fires regardless of how links are " +
+          "rewritten, so the only reading is that the file that went out did " +
+          "not carry the tracking. Everything in the table is build-team " +
+          "testing from 9 to 19 September, Fusion test-twin traffic, and four " +
+          "diagnostic hits on 8 October. Figures for this wave can only come " +
+          "from IMI’s own platform. Do not report from this campaign.",
       },
       {
         id: "gilead-veklury-email-2",
