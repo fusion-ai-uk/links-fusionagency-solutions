@@ -159,10 +159,17 @@ export const PROGRAMMES: Programme[] = [
       },
       {
         id: "gilead-ambisome-email-3",
-        label: "AmBisome Email 3",
-        status: "planned",
+        label: "AmBisome Email 3 (Fungi Now wave 3)",
+        status: "ready",
         sendDate: null,
-        notes: "Awaiting approved HTML and destination URLs.",
+        notes:
+          "Episode 3: when to change treatment of acute invasive " +
+          "aspergillosis (Dr Johan Maertens). Three CTAs across two " +
+          "destinations: the Episode 3 thumbnail and the Watch Episode 3 " +
+          "button both go to the Fungi Now learning zone, and Read the full " +
+          "study goes to the expert viewpoint on PMC. Build file Fungi Now " +
+          "Wave 3.html, job code GFM-UNB-2861. Open query: the Episode 3 " +
+          "video_id is the same as Episodes 1 and 2 — set as built meanwhile.",
       },
       {
         id: "gilead-ambisome-email-4",

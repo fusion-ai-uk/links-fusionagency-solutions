@@ -27,6 +27,18 @@ const TOUCH_ID_FUNGI_NOW_EP1 =
  */
 const TOUCH_ID_FUNGI_NOW_EP2 =
   "https://touchinfectiousdiseases.com/sepsis/learning-zone/fungi-now-timely-insights-for-sharper-clinical-decision-making/?video_id=5e7qd9ryrs";
+/**
+ * Fungi Now Episode 3, as built (Fungi Now Wave 3.html, GFM-UNB-2861).
+ *
+ * QUERY: the same video_id again — Episodes 1, 2 and 3 all carry 5e7qd9ryrs.
+ * Kept exactly as built; if a different ID comes back, change it here and no
+ * rebuild is needed.
+ */
+const TOUCH_ID_FUNGI_NOW_EP3 =
+  "https://touchinfectiousdiseases.com/sepsis/learning-zone/fungi-now-timely-insights-for-sharper-clinical-decision-making/?video_id=5e7qd9ryrs";
+/** PMC — "When to change treatment of acute, invasive aspergillosis: an expert viewpoint". */
+const PMC_ASPERGILLOSIS_CHANGE_TREATMENT =
+  "https://pmc.ncbi.nlm.nih.gov/articles/PMC8730679/";
 /** Lancet Infectious Diseases — ECMM guideline for invasive candidiasis. */
 const LANCET_ID_CANDIDIASIS_2024 =
   "https://www.thelancet.com/journals/laninf/article/PIIS1473-3099(24)00749-7/fulltext";
@@ -157,7 +169,16 @@ export const campaignLinkDestinations: Record<string, LinkDestinationMap> = {
     // "Read the full publication here →" — ECMM invasive candidiasis guideline
     "read-publication": LANCET_ID_CANDIDIASIS_2024,
   },
-  "gilead-ambisome-email-3": {},
+  // Email 3 (build file "Fungi Now Wave 3", GFM-UNB-2861): the same
+  // three-CTA, two-destination shape as emails 1 and 2.
+  "gilead-ambisome-email-3": {
+    // Episode 3 play-button image
+    "episode-3-thumbnail": TOUCH_ID_FUNGI_NOW_EP3,
+    // "Watch Episode 3 >" text button
+    "watch-episode-3": TOUCH_ID_FUNGI_NOW_EP3,
+    // "Read the full study here →" — aspergillosis expert viewpoint (PMC)
+    "read-study": PMC_ASPERGILLOSIS_CHANGE_TREATMENT,
+  },
   "gilead-ambisome-email-4": {},
   "gilead-ambisome-email-5": {},
 
