@@ -205,6 +205,26 @@ export const PROGRAMMES: Programme[] = [
           "Wave_1_Whitepaper, job code GFM-VKY-0091, October 2026.",
       },
       {
+        id: "gilead-veklury-wave-2-covid-burden",
+        label: "Veklury Wave 2 — COVID burden",
+        status: "ready",
+        sendDate: null,
+        notes:
+          "\"COVID-19 Is Still Here\". Two placements to one destination: the " +
+          "video still at the top of the email and the PRESS PLAY TO WATCH " +
+          "button, each with its own link ID so the image and the button " +
+          "report separately. The button appears twice in the HTML because of " +
+          "the Outlook conditional — one variant for Outlook, one for " +
+          "everything else — but it is one button on one ID. The reference " +
+          "links in the footer (ECDC, IDSA, EMA SmPC, NIH) and the SmPC link " +
+          "are not tracked, matching the earlier waves. " +
+          "QUERY: the destination is the bare learning-zone URL with no " +
+          "video_id, where waves 1 and 4b both carry one. As built the CTAs " +
+          "open the learning zone rather than a named film. Confirm with the " +
+          "build before send. Build file Wave_2_COVID_BURDEN, job code " +
+          "GFM-VKY-0095, October 2026.",
+      },
+      {
         id: "gilead-veklury-email-1",
         // Kept under its original ID: the links are already built into that
         // email, so renaming it would break them. The label carries the truth.

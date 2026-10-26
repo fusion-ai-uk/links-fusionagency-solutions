@@ -41,6 +41,20 @@ const TOUCH_ID_COVID_ESCMID_HIGHLIGHTS =
   "https://touchinfectiousdiseases.com/covid-19/learning-zone/evolving-management-of-covid-19-in-hospitalised-patients-evidence-experience-and-practice/?video_id=wrnbt1y7iu";
 const GRAYLING_COVID_POLICY_PAPER =
   "https://grayling.com/wp-content/uploads/2025/03/Covid-report-2_final_5.pdf";
+/**
+ * Wave 2, the COVID burden email, as built (Wave 2 COVID-19 Is Still Here.html,
+ * GFM-VKY-0095).
+ *
+ * QUERY RAISED 23 October 2026: this is the bare learning-zone URL with no
+ * video_id, where both COVID links above carry one. On this learning zone the
+ * video_id is what selects a film on a shared page, so as built these CTAs
+ * open the learning zone rather than a particular video. That may be intended
+ * — the email sells the page, not one film — but it is worth a word with the
+ * build before send. Kept exactly as the build has it rather than guessed at;
+ * if an ID comes back, change it here and no rebuild is needed.
+ */
+const TOUCH_ID_COVID_BURDEN_LEARNING_ZONE =
+  "https://touchinfectiousdiseases.com/covid-19/learning-zone/evolving-management-of-covid-19-in-hospitalised-patients-evidence-experience-and-practice";
 
 /**
  * HIV Glasgow pre-email destination, confirmed by Steve on 30 September 2026.
@@ -170,6 +184,21 @@ export const campaignLinkDestinations: Record<string, LinkDestinationMap> = {
     "symposium-video-image": TOUCH_ID_COVID_ESCMID_HIGHLIGHTS,
     // "Click here to download the policy paper >" — Grayling COVID policy paper
     "download-policy-paper": GRAYLING_COVID_POLICY_PAPER,
+  },
+
+  // Wave 2, the COVID burden email (build file Wave_2_COVID_BURDEN,
+  // GFM-VKY-0095, October 2026). Two placements, one destination, each with
+  // its own ID so the image and the button report separately — the same
+  // arrangement Steve asked for on the wave 1 whitepaper.
+  //
+  // The button appears twice in the HTML, inside the Outlook conditional: one
+  // variant renders in Outlook and the other everywhere else. They are one
+  // button and share one link ID. Only the image is a second placement.
+  "gilead-veklury-wave-2-covid-burden": {
+    // The video still at the top of the email (video_image.png)
+    "video-image": TOUCH_ID_COVID_BURDEN_LEARNING_ZONE,
+    // "▶︎ PRESS PLAY TO WATCH" button, both Outlook and standard variants
+    "press-play-to-watch": TOUCH_ID_COVID_BURDEN_LEARNING_ZONE,
   },
 
   "gilead-veklury-email-2": {},
