@@ -168,8 +168,8 @@ export const PROGRAMMES: Programme[] = [
           "destinations: the Episode 3 thumbnail and the Watch Episode 3 " +
           "button both go to the Fungi Now learning zone, and Read the full " +
           "study goes to the expert viewpoint on PMC. Build file Fungi Now " +
-          "Wave 3.html, job code GFM-UNB-2861. Open query: the Episode 3 " +
-          "video_id is the same as Episodes 1 and 2 — set as built meanwhile.",
+          "Wave 3.html, job code GFM-UNB-2861. Episode 3 video_id corrected " +
+          "to 5vh2h64mrw on 27 October 2026 (the build had Episode 1's).",
       },
       {
         id: "gilead-ambisome-email-4",

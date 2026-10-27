@@ -30,12 +30,11 @@ const TOUCH_ID_FUNGI_NOW_EP2 =
 /**
  * Fungi Now Episode 3, as built (Fungi Now Wave 3.html, GFM-UNB-2861).
  *
- * QUERY: the same video_id again — Episodes 1, 2 and 3 all carry 5e7qd9ryrs.
- * Kept exactly as built; if a different ID comes back, change it here and no
- * rebuild is needed.
+ * The build carried 5e7qd9ryrs, Episode 1's video_id. Corrected to 5vh2h64mrw
+ * on 27 October 2026 at the build team's request; the HTML is unaffected.
  */
 const TOUCH_ID_FUNGI_NOW_EP3 =
-  "https://touchinfectiousdiseases.com/sepsis/learning-zone/fungi-now-timely-insights-for-sharper-clinical-decision-making/?video_id=5e7qd9ryrs";
+  "https://touchinfectiousdiseases.com/sepsis/learning-zone/fungi-now-timely-insights-for-sharper-clinical-decision-making/?video_id=5vh2h64mrw";
 /** PMC — "When to change treatment of acute, invasive aspergillosis: an expert viewpoint". */
 const PMC_ASPERGILLOSIS_CHANGE_TREATMENT =
   "https://pmc.ncbi.nlm.nih.gov/articles/PMC8730679/";
